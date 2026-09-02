@@ -28,7 +28,7 @@ struct RootTabView: View {
         }
         .sheet(isPresented: $coordinator.isPresentingRecipeEditor) {
             NavigationStack {
-                RecipeEditorView()
+                RecipeEditorView(recipe: coordinator.editingRecipe)
             }
         }
         .overlay(alignment: .bottom) {

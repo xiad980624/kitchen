@@ -5,6 +5,7 @@ import SwiftUI
 final class AppCoordinator: ObservableObject {
     @Published var selectedTab: AppTab = .menu
     @Published var isPresentingRecipeEditor = false
+    @Published var editingRecipe: Recipe?
     @Published var toastMessage: String?
 
     func showToast(_ message: String) {

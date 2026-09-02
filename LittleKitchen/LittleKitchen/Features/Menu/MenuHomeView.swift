@@ -2,7 +2,9 @@ import SwiftUI
 
 struct MenuHomeView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
+    @EnvironmentObject private var kitchenStore: LocalKitchenStore
     @State private var selectedSection = "今天"
+    @State private var searchText = ""
 
     private let sections = ["今天", "我想吃", "家庭常点", "全部菜谱"]
 
@@ -12,6 +14,7 @@ struct MenuHomeView: View {
                 header
                 TodayMenuCard()
                 sectionPicker
+                searchField
                 recipeSection
             }
             .padding(.horizontal, 20)
@@ -87,12 +90,41 @@ struct MenuHomeView: View {
                 .foregroundStyle(AppTheme.sage)
             }
 
-            ForEach(SampleData.recipes) { recipe in
+            ForEach(filteredRecipes) { recipe in
                 NavigationLink(value: recipe) {
                     RecipeRow(recipe: recipe)
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(AppTheme.muted)
+            TextField("搜索菜名、食材或分类", text: $searchText)
+        }
+        .padding(12)
+        .background(AppTheme.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var filteredRecipes: [Recipe] {
+        let sectionRecipes: [Recipe]
+        switch selectedSection {
+        case "我想吃":
+            sectionRecipes = kitchenStore.recipes.filter { kitchenStore.isVoted($0) }
+        case "家庭常点":
+            sectionRecipes = kitchenStore.recipes.sorted { $0.voteCount > $1.voteCount }
+        default:
+            sectionRecipes = kitchenStore.recipes
+        }
+        guard !searchText.isEmpty else { return sectionRecipes }
+        return sectionRecipes.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+                || $0.category.rawValue.localizedCaseInsensitiveContains(searchText)
+                || $0.ingredients.contains { $0.name.localizedCaseInsensitiveContains(searchText) }
         }
     }
 }
@@ -160,6 +192,7 @@ private struct MenuDishLine: View {
 
 struct RecipeRow: View {
     let recipe: Recipe
+    @EnvironmentObject private var kitchenStore: LocalKitchenStore
 
     var body: some View {
         HStack(spacing: 13) {
@@ -170,8 +203,8 @@ struct RecipeRow: View {
                         .font(.headline)
                         .foregroundStyle(AppTheme.ink)
                     Spacer(minLength: 8)
-                    if recipe.voteCount > 0 {
-                        Text("\(recipe.voteCount) 人想吃")
+                    if recipe.voteCount + (kitchenStore.isVoted(recipe) ? 1 : 0) > 0 {
+                        Text("\(recipe.voteCount + (kitchenStore.isVoted(recipe) ? 1 : 0)) 人想吃")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(AppTheme.carrot)
                     }

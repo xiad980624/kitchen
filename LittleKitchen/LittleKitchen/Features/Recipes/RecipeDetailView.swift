@@ -3,7 +3,9 @@ import SwiftUI
 struct RecipeDetailView: View {
     let recipe: Recipe
     @EnvironmentObject private var coordinator: AppCoordinator
-    @State private var hasVoted = false
+    @EnvironmentObject private var kitchenStore: LocalKitchenStore
+    @State private var selectedRating = 5
+    @State private var reviewText = ""
 
     var body: some View {
         ScrollView {
@@ -20,6 +22,18 @@ struct RecipeDetailView: View {
         }
         .background(AppTheme.cream.ignoresSafeArea())
         .navigationTitle(recipe.title)
+        .toolbar {
+            Button("编辑") {
+                coordinator.editingRecipe = recipe
+                coordinator.isPresentingRecipeEditor = true
+            }
+        }
+        .onAppear {
+            if let review = kitchenStore.review(for: recipe) {
+                selectedRating = review.rating
+                reviewText = review.comment
+            }
+        }
     }
 
     private var hero: some View {
@@ -42,10 +56,10 @@ struct RecipeDetailView: View {
     private var actionRow: some View {
         HStack(spacing: 10) {
             Button {
-                hasVoted.toggle()
-                coordinator.showToast(hasVoted ? "已加入想吃清单" : "已取消点菜")
+                kitchenStore.toggleVote(for: recipe)
+                coordinator.showToast(kitchenStore.isVoted(recipe) ? "已加入想吃清单" : "已取消点菜")
             } label: {
-                Label(hasVoted ? "已点菜" : "我想吃", systemImage: hasVoted ? "heart.fill" : "heart")
+                Label(kitchenStore.isVoted(recipe) ? "已点菜" : "我想吃", systemImage: kitchenStore.isVoted(recipe) ? "heart.fill" : "heart")
             }
             .buttonStyle(PrimaryButtonStyle())
 
@@ -142,11 +156,26 @@ struct RecipeDetailView: View {
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.muted)
             }
-            Text("“这次的花生炒得特别香，下次少放一点糖。”")
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.ink)
-                .padding(15)
+            Picker("我的评分", selection: $selectedRating) {
+                ForEach(1...5, id: \.self) { rating in
+                    Text("\(rating) 星").tag(rating)
+                }
+            }
+            .pickerStyle(.segmented)
+            TextField("写下这次的感受（可选）", text: $reviewText, axis: .vertical)
+                .lineLimit(2...4)
+                .padding(12)
                 .appCard()
+            Button("保存我的评分") {
+                kitchenStore.saveReview(recipeID: recipe.id, rating: selectedRating, comment: reviewText)
+                coordinator.showToast("评分已保存")
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            if let review = kitchenStore.review(for: recipe) {
+                Text("你给了 \(review.rating) 星\(review.comment.isEmpty ? "" : "：\(review.comment)")")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.muted)
+            }
         }
     }
 }
