@@ -10,6 +10,6 @@
 
 1. 用 Xcode 打开 `LittleKitchen/LittleKitchen.xcodeproj`。
 2. 选择任一 iOS 17 或更高版本的模拟器，运行 `LittleKitchen` scheme。
-3. 在开始 CloudKit 迭代前，将 `com.xd.LittleKitchen` 替换为已注册的最终 Bundle ID，并配置对应的 Apple Developer Team 和 CloudKit Container。
+3. 工程当前使用 Bundle ID `com.xiad980624.LittleKitchen`。设备端数据保存不依赖 iCloud；后续接入自建服务端时再配置服务端地址与身份认证。
 
 产品范围与架构决策见 [iOS 开发蓝图](docs/ios-development-blueprint.md)。
