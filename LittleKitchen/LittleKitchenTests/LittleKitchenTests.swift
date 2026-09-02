@@ -24,48 +24,75 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
-    func testVotePersistsInLocalCache() {
-        let defaults = makeDefaults()
-        let recipe = LocalKitchenStore(defaults: defaults).recipes[0]
+    func testVotePersistsInSwiftDataCache() {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        XCTAssertTrue(persistence is SwiftDataKitchenSnapshotPersistence)
+        let recipe = LocalKitchenStore(persistence: persistence, legacyDefaults: nil).recipes[0]
 
-        let store = LocalKitchenStore(defaults: defaults)
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
         store.toggleVote(for: recipe)
 
-        XCTAssertTrue(LocalKitchenStore(defaults: defaults).isVoted(recipe))
+        XCTAssertTrue(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).isVoted(recipe))
     }
 
     @MainActor
-    func testReviewPersistsInLocalCache() {
-        let defaults = makeDefaults()
-        let recipe = LocalKitchenStore(defaults: defaults).recipes[0]
-        let store = LocalKitchenStore(defaults: defaults)
+    func testReviewPersistsInSwiftDataCache() {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let recipe = LocalKitchenStore(persistence: persistence, legacyDefaults: nil).recipes[0]
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
 
         store.saveReview(recipeID: recipe.id, rating: 5, comment: "做得很好吃")
 
-        let savedReview = LocalKitchenStore(defaults: defaults).review(for: recipe)
+        let savedReview = LocalKitchenStore(persistence: persistence, legacyDefaults: nil).review(for: recipe)
         XCTAssertEqual(savedReview?.rating, 5)
         XCTAssertEqual(savedReview?.comment, "做得很好吃")
     }
 
     @MainActor
     func testSchedulingRecipePersistsForToday() {
-        let defaults = makeDefaults()
-        let store = LocalKitchenStore(defaults: defaults)
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
         let recipe = store.recipes[2]
 
         store.schedule(recipe)
 
-        XCTAssertTrue(LocalKitchenStore(defaults: defaults).recipes(for: .now).contains(recipe))
+        XCTAssertTrue(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).recipes(for: .now).contains(recipe))
     }
 
     @MainActor
     func testAddingMissingIngredientUpdatesShoppingList() {
-        let store = LocalKitchenStore(defaults: makeDefaults())
+        let store = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
         let missingIngredient = try! XCTUnwrap(store.shoppingList.first)
 
         store.addPantryItem(name: missingIngredient)
 
         XCTAssertFalse(store.shoppingList.contains(missingIngredient))
+    }
+
+    @MainActor
+    func testLegacyUserDefaultsDataMigratesIntoLocalStore() throws {
+        let defaults = makeDefaults()
+        let legacyRecipe = Recipe(
+            title: "迁移测试菜谱",
+            category: .quick,
+            emoji: "🥘",
+            duration: 15,
+            rating: 0,
+            reviewCount: 0,
+            voteCount: 0,
+            availability: .ready,
+            ingredients: [],
+            steps: []
+        )
+        let legacyRecipes = [legacyRecipe]
+        defaults.set(try JSONEncoder().encode(legacyRecipes), forKey: "littleKitchen.localRecipes")
+
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: defaults)
+        let reloadedStore = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+
+        XCTAssertEqual(store.recipes, legacyRecipes)
+        XCTAssertEqual(reloadedStore.recipes, legacyRecipes)
     }
 
     private func makeDefaults() -> UserDefaults {
