@@ -16,6 +16,7 @@ struct RecipeDetailView: View {
                 ingredients
                 steps
                 reviews
+                revisionHistory
             }
             .padding(20)
             .padding(.bottom, 28)
@@ -176,6 +177,56 @@ struct RecipeDetailView: View {
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.muted)
             }
+        }
+    }
+
+    private var revisionHistory: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("修改记录")
+                .font(.title3.weight(.bold))
+
+            let history = kitchenStore.revisions(for: recipe)
+            if history.isEmpty {
+                Text("保存菜谱后的修改会显示在这里")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.muted)
+            }
+
+            ForEach(history) { revision in
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let previousRecipe = revision.previousRecipe {
+                            snapshotSummary(previousRecipe, title: "修改前")
+                        }
+                        snapshotSummary(revision.recipe, title: "保存后")
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("版本 \(revision.version) · \(revision.summary)")
+                            .font(.subheadline.weight(.semibold))
+                        Text(revision.editedAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.muted)
+                    }
+                }
+                .tint(AppTheme.sage)
+                .padding(14)
+                .appCard()
+            }
+        }
+    }
+
+    private func snapshotSummary(_ snapshot: Recipe, title: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(AppTheme.muted)
+            Text("\(snapshot.title) · \(snapshot.category.rawValue) · \(snapshot.duration) 分钟")
+                .font(.subheadline)
+            Text(snapshot.ingredients.map(\.name).joined(separator: "、"))
+                .font(.caption)
+                .foregroundStyle(AppTheme.muted)
         }
     }
 }
