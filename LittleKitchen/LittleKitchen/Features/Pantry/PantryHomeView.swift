@@ -6,10 +6,12 @@ struct PantryHomeView: View {
     @State private var isPresentingAddItem = false
     @State private var itemBeingEdited: PantryItem?
     @State private var itemPendingRemoval: PantryItem?
+    @State private var isPresentingAddShoppingItem = false
     @State private var newItemName = ""
     @State private var newItemCategory = "其他"
     @State private var newItemQuantity = ""
     @State private var newItemExpiryHint = ""
+    @State private var newShoppingItemName = ""
 
     var body: some View {
         NavigationStack {
@@ -78,6 +80,22 @@ struct PantryHomeView: View {
             }
         } message: {
             Text("移除后，待购清单会按最新库存重新计算。")
+        }
+        .alert("补充待购项", isPresented: $isPresentingAddShoppingItem) {
+            TextField("例如 厨房纸", text: $newShoppingItemName)
+            Button("取消", role: .cancel) {
+                newShoppingItemName = ""
+            }
+            Button("添加") {
+                guard kitchenStore.addShoppingItem(name: newShoppingItemName) else {
+                    coordinator.showToast("待购项不能为空，且不能重复")
+                    return
+                }
+                newShoppingItemName = ""
+                coordinator.showToast("已加入待购清单")
+            }
+        } message: {
+            Text("手动加入的项目会保存在本机，不受菜单变动影响。")
         }
     }
 
@@ -150,7 +168,7 @@ struct PantryHomeView: View {
                     title: "冰箱还是空的",
                     message: "先录入已有食材，菜单核对才能准确提示缺少什么。",
                     actionTitle: "添加食材",
-                    action: { isPresentingAddItem = true }
+                    action: presentNewItemEditor
                 )
             } else {
                 ForEach(kitchenStore.pantryItems) { item in
@@ -201,21 +219,56 @@ struct PantryHomeView: View {
                 Text("待购清单")
                     .font(.title3.weight(.bold))
                 Spacer()
-                Text("根据今天已安排菜单")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.muted)
+                Button {
+                    newShoppingItemName = ""
+                    isPresentingAddShoppingItem = true
+                } label: {
+                    Label("补充", systemImage: "plus")
+                        .font(.caption.weight(.semibold))
+                }
+                .accessibilityLabel("手动添加待购项")
             }
-            if kitchenStore.shoppingList.isEmpty {
-                Label("食材齐全", systemImage: "checkmark.circle.fill")
+            Text("菜单缺少的食材会自动加入；勾选购买后仍需入库。")
+                .font(.caption)
+                .foregroundStyle(AppTheme.muted)
+            if kitchenStore.shoppingItems.isEmpty {
+                Label("暂无待购项", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.sage)
             } else {
-                ForEach(kitchenStore.shoppingList, id: \.self) { item in
+                ForEach(kitchenStore.shoppingItems) { item in
                     HStack {
-                        Image(systemName: "circle")
-                            .foregroundStyle(AppTheme.carrot)
-                        Text(item)
+                        Button {
+                            kitchenStore.toggleShoppingItem(item)
+                        } label: {
+                            Image(systemName: item.isChecked ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(item.isChecked ? AppTheme.sage : AppTheme.carrot)
+                        }
+                        .accessibilityLabel("\(item.isChecked ? "取消勾选" : "勾选")\(item.name)")
+                        Text(item.name)
                             .font(.subheadline.weight(.medium))
+                            .strikethrough(item.isChecked)
+                            .foregroundStyle(item.isChecked ? AppTheme.muted : AppTheme.ink)
+                        if item.isManual {
+                            Text("手动")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(AppTheme.sage)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(AppTheme.sageSoft)
+                                .clipShape(Capsule())
+                        }
+                        Spacer()
+                        if item.isManual {
+                            Button {
+                                kitchenStore.removeShoppingItem(item)
+                                coordinator.showToast("已移除\(item.name)")
+                            } label: {
+                                Image(systemName: "minus.circle")
+                                    .foregroundStyle(AppTheme.tomato)
+                            }
+                            .accessibilityLabel("移除待购项\(item.name)")
+                        }
                     }
                 }
             }

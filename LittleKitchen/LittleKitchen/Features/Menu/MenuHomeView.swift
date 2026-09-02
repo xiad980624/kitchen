@@ -5,6 +5,8 @@ struct MenuHomeView: View {
     @EnvironmentObject private var kitchenStore: LocalKitchenStore
     @State private var selectedSection = "今天"
     @State private var searchText = ""
+    @State private var selectedCategory: RecipeCategory?
+    @State private var sortOption: RecipeSortOption = .recommended
 
     private let sections = ["今天", "我想吃", "家庭常点", "全部菜谱"]
 
@@ -15,6 +17,7 @@ struct MenuHomeView: View {
                 TodayMenuCard()
                 sectionPicker
                 searchField
+                categoryPicker
                 recipeSection
             }
             .padding(.horizontal, 20)
@@ -84,6 +87,18 @@ struct MenuHomeView: View {
                 Text(selectedSection == "今天" ? "大家想吃的菜" : selectedSection)
                     .font(.title3.weight(.bold))
                 Spacer()
+                Menu {
+                    Picker("排序", selection: $sortOption) {
+                        ForEach(RecipeSortOption.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                } label: {
+                    Label(sortOption.title, systemImage: "arrow.up.arrow.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.sage)
+                }
+                .accessibilityLabel("菜谱排序：\(sortOption.title)")
                 Text("\(filteredRecipes.count) 道")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.muted)
@@ -120,6 +135,24 @@ struct MenuHomeView: View {
         .accessibilityLabel("搜索菜谱")
     }
 
+    private var categoryPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Button("全部分类") {
+                    selectedCategory = nil
+                }
+                .categoryChip(isSelected: selectedCategory == nil)
+                ForEach(RecipeCategory.allCases) { category in
+                    Button(category.rawValue) {
+                        selectedCategory = category
+                    }
+                    .categoryChip(isSelected: selectedCategory == category)
+                }
+            }
+        }
+        .accessibilityLabel("按菜谱分类筛选")
+    }
+
     private var filteredRecipes: [Recipe] {
         let sectionRecipes: [Recipe]
         switch selectedSection {
@@ -130,12 +163,66 @@ struct MenuHomeView: View {
         default:
             sectionRecipes = kitchenStore.recipes
         }
-        guard !searchText.isEmpty else { return sectionRecipes }
-        return sectionRecipes.filter {
+        let categoryRecipes = selectedCategory.map { category in
+            sectionRecipes.filter { $0.category == category }
+        } ?? sectionRecipes
+        let searchedRecipes: [Recipe]
+        if searchText.isEmpty {
+            searchedRecipes = categoryRecipes
+        } else {
+            searchedRecipes = categoryRecipes.filter {
             $0.title.localizedCaseInsensitiveContains(searchText)
                 || $0.category.rawValue.localizedCaseInsensitiveContains(searchText)
                 || $0.ingredients.contains { $0.name.localizedCaseInsensitiveContains(searchText) }
+            }
         }
+        return sortOption.sort(searchedRecipes, kitchenStore: kitchenStore)
+    }
+}
+
+private enum RecipeSortOption: String, CaseIterable, Identifiable {
+    case recommended
+    case quick
+    case rating
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recommended: "推荐"
+        case .quick: "最快做"
+        case .rating: "评分高"
+        }
+    }
+
+    func sort(_ recipes: [Recipe], kitchenStore: LocalKitchenStore) -> [Recipe] {
+        switch self {
+        case .recommended:
+            recipes.sorted {
+                let firstVotes = $0.voteCount + (kitchenStore.isVoted($0) ? 1 : 0)
+                let secondVotes = $1.voteCount + (kitchenStore.isVoted($1) ? 1 : 0)
+                return firstVotes == secondVotes ? $0.rating > $1.rating : firstVotes > secondVotes
+            }
+        case .quick:
+            recipes.sorted { $0.duration < $1.duration }
+        case .rating:
+            recipes.sorted { $0.rating > $1.rating }
+        }
+    }
+}
+
+private extension View {
+    func categoryChip(isSelected: Bool) -> some View {
+        font(.caption.weight(.semibold))
+            .foregroundStyle(isSelected ? .white : AppTheme.muted)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(isSelected ? AppTheme.sage : AppTheme.paper)
+            .clipShape(Capsule())
+            .overlay {
+                Capsule().stroke(AppTheme.line, lineWidth: isSelected ? 0 : 1)
+            }
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

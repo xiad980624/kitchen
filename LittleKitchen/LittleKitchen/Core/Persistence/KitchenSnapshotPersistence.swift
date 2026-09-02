@@ -8,6 +8,8 @@ struct KitchenSnapshot: Codable {
     let pantryItems: [PantryItem]
     let scheduledRecipeIDsByDate: [String: [UUID]]
     let completedRecipeIDsByDate: [String: [UUID]]
+    let manualShoppingItems: [ShoppingItem]
+    let checkedAutomaticShoppingItemNames: [String]
     let revisions: [RecipeRevision]
 
     init(
@@ -17,6 +19,8 @@ struct KitchenSnapshot: Codable {
         pantryItems: [PantryItem],
         scheduledRecipeIDsByDate: [String: [UUID]],
         completedRecipeIDsByDate: [String: [UUID]] = [:],
+        manualShoppingItems: [ShoppingItem] = [],
+        checkedAutomaticShoppingItemNames: [String] = [],
         revisions: [RecipeRevision] = []
     ) {
         self.recipes = recipes
@@ -25,6 +29,8 @@ struct KitchenSnapshot: Codable {
         self.pantryItems = pantryItems
         self.scheduledRecipeIDsByDate = scheduledRecipeIDsByDate
         self.completedRecipeIDsByDate = completedRecipeIDsByDate
+        self.manualShoppingItems = manualShoppingItems
+        self.checkedAutomaticShoppingItemNames = checkedAutomaticShoppingItemNames
         self.revisions = revisions
     }
 
@@ -35,6 +41,8 @@ struct KitchenSnapshot: Codable {
         case pantryItems
         case scheduledRecipeIDsByDate
         case completedRecipeIDsByDate
+        case manualShoppingItems
+        case checkedAutomaticShoppingItemNames
         case revisions
     }
 
@@ -46,6 +54,8 @@ struct KitchenSnapshot: Codable {
         pantryItems = try container.decode([PantryItem].self, forKey: .pantryItems)
         scheduledRecipeIDsByDate = try container.decode([String: [UUID]].self, forKey: .scheduledRecipeIDsByDate)
         completedRecipeIDsByDate = try container.decodeIfPresent([String: [UUID]].self, forKey: .completedRecipeIDsByDate) ?? [:]
+        manualShoppingItems = try container.decodeIfPresent([ShoppingItem].self, forKey: .manualShoppingItems) ?? []
+        checkedAutomaticShoppingItemNames = try container.decodeIfPresent([String].self, forKey: .checkedAutomaticShoppingItemNames) ?? []
         revisions = try container.decodeIfPresent([RecipeRevision].self, forKey: .revisions) ?? []
     }
 }
@@ -168,6 +178,8 @@ enum LegacyKitchenSnapshotLoader {
             pantryItems: decode([PantryItem].self, key: pantryKey, defaults: defaults) ?? SampleData.pantryItems,
             scheduledRecipeIDsByDate: decode([String: [UUID]].self, key: mealPlanKey, defaults: defaults) ?? defaultSchedule,
             completedRecipeIDsByDate: [:],
+            manualShoppingItems: [],
+            checkedAutomaticShoppingItemNames: [],
             revisions: []
         )
     }

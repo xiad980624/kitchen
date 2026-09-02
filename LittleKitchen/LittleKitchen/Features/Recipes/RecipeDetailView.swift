@@ -6,6 +6,8 @@ struct RecipeDetailView: View {
     @EnvironmentObject private var kitchenStore: LocalKitchenStore
     @State private var selectedRating = 5
     @State private var reviewText = ""
+    @State private var isPresentingSchedulePicker = false
+    @State private var scheduledDate = Date.now
 
     var body: some View {
         ScrollView {
@@ -33,6 +35,27 @@ struct RecipeDetailView: View {
             if let review = kitchenStore.review(for: recipe) {
                 selectedRating = review.rating
                 reviewText = review.comment
+            }
+        }
+        .sheet(isPresented: $isPresentingSchedulePicker) {
+            NavigationStack {
+                Form {
+                    DatePicker("安排日期", selection: $scheduledDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                }
+                .navigationTitle("安排\(recipe.title)")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { isPresentingSchedulePicker = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("安排") {
+                            kitchenStore.schedule(recipe, for: scheduledDate)
+                            coordinator.showToast("已安排到\(scheduledDate.formatted(.dateTime.month().day()))")
+                            isPresentingSchedulePicker = false
+                        }
+                    }
+                }
             }
         }
     }
@@ -65,10 +88,10 @@ struct RecipeDetailView: View {
             .buttonStyle(PrimaryButtonStyle())
 
             Button {
-                coordinator.selectedTab = .calendar
-                coordinator.showToast("请选择日期安排这道菜")
+                scheduledDate = .now
+                isPresentingSchedulePicker = true
             } label: {
-                Label("安排", systemImage: "calendar.badge.plus")
+                Label("安排日期", systemImage: "calendar.badge.plus")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(AppTheme.sage)
                     .padding(.horizontal, 15)
