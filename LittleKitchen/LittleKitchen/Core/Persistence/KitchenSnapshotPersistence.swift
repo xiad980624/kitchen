@@ -7,6 +7,42 @@ struct KitchenSnapshot: Codable {
     let reviews: [RecipeReview]
     let pantryItems: [PantryItem]
     let scheduledRecipeIDsByDate: [String: [UUID]]
+    let revisions: [RecipeRevision]
+
+    init(
+        recipes: [Recipe],
+        votedRecipeIDs: [UUID],
+        reviews: [RecipeReview],
+        pantryItems: [PantryItem],
+        scheduledRecipeIDsByDate: [String: [UUID]],
+        revisions: [RecipeRevision] = []
+    ) {
+        self.recipes = recipes
+        self.votedRecipeIDs = votedRecipeIDs
+        self.reviews = reviews
+        self.pantryItems = pantryItems
+        self.scheduledRecipeIDsByDate = scheduledRecipeIDsByDate
+        self.revisions = revisions
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case recipes
+        case votedRecipeIDs
+        case reviews
+        case pantryItems
+        case scheduledRecipeIDsByDate
+        case revisions
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        recipes = try container.decode([Recipe].self, forKey: .recipes)
+        votedRecipeIDs = try container.decode([UUID].self, forKey: .votedRecipeIDs)
+        reviews = try container.decode([RecipeReview].self, forKey: .reviews)
+        pantryItems = try container.decode([PantryItem].self, forKey: .pantryItems)
+        scheduledRecipeIDsByDate = try container.decode([String: [UUID]].self, forKey: .scheduledRecipeIDsByDate)
+        revisions = try container.decodeIfPresent([RecipeRevision].self, forKey: .revisions) ?? []
+    }
 }
 
 @MainActor
@@ -125,7 +161,8 @@ enum LegacyKitchenSnapshotLoader {
             votedRecipeIDs: decode([UUID].self, key: votesKey, defaults: defaults) ?? [],
             reviews: decode([RecipeReview].self, key: reviewsKey, defaults: defaults) ?? [],
             pantryItems: decode([PantryItem].self, key: pantryKey, defaults: defaults) ?? SampleData.pantryItems,
-            scheduledRecipeIDsByDate: decode([String: [UUID]].self, key: mealPlanKey, defaults: defaults) ?? defaultSchedule
+            scheduledRecipeIDsByDate: decode([String: [UUID]].self, key: mealPlanKey, defaults: defaults) ?? defaultSchedule,
+            revisions: []
         )
     }
 

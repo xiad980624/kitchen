@@ -95,6 +95,51 @@ final class LittleKitchenTests: XCTestCase {
         XCTAssertEqual(reloadedStore.recipes, legacyRecipes)
     }
 
+    @MainActor
+    func testEditingRecipeCreatesPersistedRevisionWithBothSnapshots() throws {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let originalRecipe = try XCTUnwrap(store.recipes.first)
+        let updatedRecipe = Recipe(
+            id: originalRecipe.id,
+            title: originalRecipe.title,
+            category: originalRecipe.category,
+            emoji: originalRecipe.emoji,
+            duration: originalRecipe.duration + 5,
+            rating: originalRecipe.rating,
+            reviewCount: originalRecipe.reviewCount,
+            voteCount: originalRecipe.voteCount,
+            availability: originalRecipe.availability,
+            ingredients: originalRecipe.ingredients,
+            steps: originalRecipe.steps
+        )
+
+        store.save(recipe: updatedRecipe)
+
+        let revision = try XCTUnwrap(store.revisions(for: updatedRecipe).first)
+        XCTAssertEqual(revision.version, 1)
+        XCTAssertEqual(revision.summary, "修改了烹饪时长")
+        XCTAssertEqual(revision.previousRecipe, originalRecipe)
+        XCTAssertEqual(revision.recipe, updatedRecipe)
+        XCTAssertEqual(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).revisions(for: updatedRecipe).first, revision)
+    }
+
+    func testOlderSnapshotWithoutRevisionsCanStillDecode() throws {
+        let snapshot = KitchenSnapshot(
+            recipes: SampleData.recipes,
+            votedRecipeIDs: [],
+            reviews: [],
+            pantryItems: SampleData.pantryItems,
+            scheduledRecipeIDsByDate: [:]
+        )
+        let encodedSnapshot = try JSONEncoder().encode(snapshot)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encodedSnapshot) as? [String: Any])
+        object.removeValue(forKey: "revisions")
+        let olderSnapshot = try JSONSerialization.data(withJSONObject: object)
+
+        XCTAssertTrue(try JSONDecoder().decode(KitchenSnapshot.self, from: olderSnapshot).revisions.isEmpty)
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "LittleKitchenTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

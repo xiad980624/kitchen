@@ -112,3 +112,31 @@ struct RecipeReview: Identifiable, Hashable, Codable {
         self.updatedAt = updatedAt
     }
 }
+
+struct RecipeRevision: Identifiable, Hashable, Codable {
+    let id: UUID
+    let recipeID: UUID
+    let version: Int
+    let summary: String
+    let previousRecipe: Recipe?
+    let recipe: Recipe
+    let editedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        recipeID: UUID,
+        version: Int,
+        summary: String,
+        previousRecipe: Recipe?,
+        recipe: Recipe,
+        editedAt: Date = .now
+    ) {
+        self.id = id
+        self.recipeID = recipeID
+        self.version = version
+        self.summary = summary
+        self.previousRecipe = previousRecipe
+        self.recipe = recipe
+        self.editedAt = editedAt
+    }
+}
