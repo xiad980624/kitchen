@@ -47,6 +47,27 @@ final class LittleKitchenTests: XCTestCase {
         XCTAssertEqual(savedReview?.comment, "做得很好吃")
     }
 
+    @MainActor
+    func testSchedulingRecipePersistsForToday() {
+        let defaults = makeDefaults()
+        let store = LocalKitchenStore(defaults: defaults)
+        let recipe = store.recipes[2]
+
+        store.schedule(recipe)
+
+        XCTAssertTrue(LocalKitchenStore(defaults: defaults).recipes(for: .now).contains(recipe))
+    }
+
+    @MainActor
+    func testAddingMissingIngredientUpdatesShoppingList() {
+        let store = LocalKitchenStore(defaults: makeDefaults())
+        let missingIngredient = try! XCTUnwrap(store.shoppingList.first)
+
+        store.addPantryItem(name: missingIngredient)
+
+        XCTAssertFalse(store.shoppingList.contains(missingIngredient))
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "LittleKitchenTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

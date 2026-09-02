@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CalendarHomeView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
+    @EnvironmentObject private var kitchenStore: LocalKitchenStore
 
     private let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
     private let days = Array(1...30)
@@ -21,7 +22,14 @@ struct CalendarHomeView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        coordinator.showToast("请选择日期后安排菜谱")
+                        guard let recipe = kitchenStore.recipes.first(where: { candidate in
+                            !kitchenStore.recipes(for: .now).contains(candidate)
+                        }) else {
+                            coordinator.showToast("今天的菜谱已全部安排")
+                            return
+                        }
+                        kitchenStore.schedule(recipe)
+                        coordinator.showToast("已将\(recipe.title)安排到今天")
                     } label: {
                         Label("安排", systemImage: "plus")
                     }
@@ -87,16 +95,26 @@ struct CalendarHomeView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle())
             }
-            ForEach(SampleData.recipes.prefix(2)) { recipe in
+            if kitchenStore.recipes(for: .now).isEmpty {
+                Text("还没有安排菜谱")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.muted)
+            }
+            ForEach(kitchenStore.recipes(for: .now)) { recipe in
                 HStack {
                     Text(recipe.emoji)
                         .font(.title2)
                     Text(recipe.title)
                         .font(.subheadline.weight(.bold))
                     Spacer()
-                    Text(recipe.duration == 35 ? "18:30" : "19:10")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.muted)
+                    Button {
+                        kitchenStore.removeFromSchedule(recipe)
+                        coordinator.showToast("已从今天菜单移除")
+                    } label: {
+                        Image(systemName: "minus.circle")
+                            .foregroundStyle(AppTheme.tomato)
+                    }
+                    .accessibilityLabel("移除\(recipe.title)")
                 }
                 .padding(.vertical, 7)
             }

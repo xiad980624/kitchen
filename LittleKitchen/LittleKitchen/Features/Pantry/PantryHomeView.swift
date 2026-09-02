@@ -2,6 +2,9 @@ import SwiftUI
 
 struct PantryHomeView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
+    @EnvironmentObject private var kitchenStore: LocalKitchenStore
+    @State private var isPresentingAddItem = false
+    @State private var newItemName = ""
 
     var body: some View {
         NavigationStack {
@@ -9,6 +12,7 @@ struct PantryHomeView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     summary
                     tonightCheck
+                    shoppingList
                     inventory
                 }
                 .padding(20)
@@ -19,9 +23,30 @@ struct PantryHomeView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        coordinator.showToast("添加食材将在下一轮接入")
+                        isPresentingAddItem = true
                     } label: {
                         Label("添加", systemImage: "plus")
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $isPresentingAddItem) {
+            NavigationStack {
+                Form {
+                    TextField("食材名称", text: $newItemName)
+                }
+                .navigationTitle("添加食材")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { isPresentingAddItem = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("入库") {
+                            kitchenStore.addPantryItem(name: newItemName)
+                            newItemName = ""
+                            isPresentingAddItem = false
+                            coordinator.showToast("食材已加入冰箱")
+                        }
                     }
                 }
             }
@@ -68,22 +93,17 @@ struct PantryHomeView: View {
             Text("今晚菜单核对")
                 .font(.title3.weight(.bold))
             HStack(spacing: 13) {
-                RecipeThumbnail(emoji: "🥬", size: 72)
+                RecipeThumbnail(emoji: kitchenStore.shoppingList.isEmpty ? "✅" : "🛒", size: 72)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("清炒时蔬")
+                        Text(kitchenStore.shoppingList.isEmpty ? "今天的菜谱都可以做" : "还差 \(kitchenStore.shoppingList.count) 样食材")
                             .font(.headline)
                         Spacer()
-                        AvailabilityPill(availability: .short)
+                        AvailabilityPill(availability: kitchenStore.shoppingList.isEmpty ? .ready : .short)
                     }
-                    Text("西兰花缺少，已进入待购清单")
+                    Text(kitchenStore.shoppingList.isEmpty ? "冰箱库存已满足今天菜单。" : "缺少食材已自动汇总到下方待购清单。")
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.muted)
-                    Button("查看待购清单") {
-                        coordinator.showToast("待购清单将在下一轮接入")
-                    }
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(AppTheme.sage)
                 }
             }
             .padding(12)
@@ -95,7 +115,7 @@ struct PantryHomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("冰箱里的食材")
                 .font(.title3.weight(.bold))
-            ForEach(SampleData.pantryItems) { item in
+            ForEach(kitchenStore.pantryItems) { item in
                 HStack(spacing: 12) {
                     Text(item.emoji)
                         .font(.title2)
@@ -119,5 +139,35 @@ struct PantryHomeView: View {
                 .appCard()
             }
         }
+    }
+
+    private var shoppingList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("待购清单")
+                    .font(.title3.weight(.bold))
+                Spacer()
+                Text("根据今天已安排菜单")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.muted)
+            }
+            if kitchenStore.shoppingList.isEmpty {
+                Label("食材齐全", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.sage)
+            } else {
+                ForEach(kitchenStore.shoppingList, id: \.self) { item in
+                    HStack {
+                        Image(systemName: "circle")
+                            .foregroundStyle(AppTheme.carrot)
+                        Text(item)
+                            .font(.subheadline.weight(.medium))
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(AppTheme.carrotSoft)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
