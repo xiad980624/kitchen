@@ -8,6 +8,7 @@ final class LocalKitchenStore: ObservableObject {
     @Published private(set) var reviews: [UUID: RecipeReview]
     @Published private(set) var pantryItems: [PantryItem]
     @Published private(set) var scheduledRecipeIDsByDate: [String: [UUID]]
+    @Published private(set) var completedRecipeIDsByDate: [String: [UUID]]
     @Published private(set) var revisions: [RecipeRevision]
 
     private let persistence: any KitchenSnapshotPersisting
@@ -26,6 +27,7 @@ final class LocalKitchenStore: ObservableObject {
         reviews = Dictionary(uniqueKeysWithValues: snapshot.reviews.map { ($0.recipeID, $0) })
         pantryItems = snapshot.pantryItems
         scheduledRecipeIDsByDate = snapshot.scheduledRecipeIDsByDate
+        completedRecipeIDsByDate = snapshot.completedRecipeIDsByDate
         revisions = snapshot.revisions
 
         if persistedSnapshot == nil {
@@ -83,12 +85,34 @@ final class LocalKitchenStore: ObservableObject {
         guard !ids.contains(recipe.id) else { return }
         ids.append(recipe.id)
         scheduledRecipeIDsByDate[key] = ids
+        completedRecipeIDsByDate[key] = []
         persistSnapshot()
     }
 
     func removeFromSchedule(_ recipe: Recipe, for date: Date = .now) {
         let key = Self.dateKey(for: date)
         scheduledRecipeIDsByDate[key]?.removeAll { $0 == recipe.id }
+        completedRecipeIDsByDate[key]?.removeAll { $0 == recipe.id }
+        persistSnapshot()
+    }
+
+    func isMenuCompleted(for date: Date = .now) -> Bool {
+        let scheduledIDs = scheduledRecipeIDsByDate[Self.dateKey(for: date)] ?? []
+        guard !scheduledIDs.isEmpty else { return false }
+        let completedIDs = Set(completedRecipeIDsByDate[Self.dateKey(for: date)] ?? [])
+        return Set(scheduledIDs).isSubset(of: completedIDs)
+    }
+
+    func completeMenu(for date: Date = .now) {
+        let key = Self.dateKey(for: date)
+        let scheduledIDs = scheduledRecipeIDsByDate[key] ?? []
+        guard !scheduledIDs.isEmpty else { return }
+        completedRecipeIDsByDate[key] = scheduledIDs
+        persistSnapshot()
+    }
+
+    func reopenMenu(for date: Date = .now) {
+        completedRecipeIDsByDate[Self.dateKey(for: date)] = []
         persistSnapshot()
     }
 
@@ -118,6 +142,7 @@ final class LocalKitchenStore: ObservableObject {
                 reviews: reviews.values.sorted { $0.recipeID.uuidString < $1.recipeID.uuidString },
                 pantryItems: pantryItems,
                 scheduledRecipeIDsByDate: scheduledRecipeIDsByDate,
+                completedRecipeIDsByDate: completedRecipeIDsByDate,
                 revisions: revisions
             )
         )
@@ -154,6 +179,7 @@ final class LocalKitchenStore: ObservableObject {
             reviews: [],
             pantryItems: SampleData.pantryItems,
             scheduledRecipeIDsByDate: [dateKey(for: .now): Array(SampleData.recipes.prefix(2).map(\.id))],
+            completedRecipeIDsByDate: [:],
             revisions: []
         )
     }

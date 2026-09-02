@@ -60,6 +60,35 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
+    func testCompletingMenuPersistsAndCanBeReopened() {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let recipe = store.recipes[2]
+        store.schedule(recipe)
+
+        store.completeMenu()
+
+        XCTAssertTrue(store.isMenuCompleted())
+        XCTAssertTrue(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).isMenuCompleted())
+
+        store.reopenMenu()
+
+        XCTAssertFalse(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).isMenuCompleted())
+    }
+
+    @MainActor
+    func testSchedulingNewRecipeReopensCompletedMenu() {
+        let store = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
+        store.completeMenu()
+        XCTAssertTrue(store.isMenuCompleted())
+
+        let recipe = try! XCTUnwrap(store.recipes.first { !store.recipes(for: .now).contains($0) })
+        store.schedule(recipe)
+
+        XCTAssertFalse(store.isMenuCompleted())
+    }
+
+    @MainActor
     func testAddingMissingIngredientUpdatesShoppingList() {
         let store = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
         let missingIngredient = try! XCTUnwrap(store.shoppingList.first)
@@ -124,6 +153,7 @@ final class LittleKitchenTests: XCTestCase {
         XCTAssertEqual(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).revisions(for: updatedRecipe).first, revision)
     }
 
+    @MainActor
     func testOlderSnapshotWithoutRevisionsCanStillDecode() throws {
         let snapshot = KitchenSnapshot(
             recipes: SampleData.recipes,
@@ -135,9 +165,12 @@ final class LittleKitchenTests: XCTestCase {
         let encodedSnapshot = try JSONEncoder().encode(snapshot)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encodedSnapshot) as? [String: Any])
         object.removeValue(forKey: "revisions")
+        object.removeValue(forKey: "completedRecipeIDsByDate")
         let olderSnapshot = try JSONSerialization.data(withJSONObject: object)
 
-        XCTAssertTrue(try JSONDecoder().decode(KitchenSnapshot.self, from: olderSnapshot).revisions.isEmpty)
+        let decodedSnapshot = try JSONDecoder().decode(KitchenSnapshot.self, from: olderSnapshot)
+        XCTAssertTrue(decodedSnapshot.revisions.isEmpty)
+        XCTAssertTrue(decodedSnapshot.completedRecipeIDsByDate.isEmpty)
     }
 
     private func makeDefaults() -> UserDefaults {
