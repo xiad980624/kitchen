@@ -14,7 +14,7 @@ struct ProfileHomeView: View {
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.82))
                         Button("邀请成员") {
-                            coordinator.showToast("家庭邀请将在 CloudKit 迭代接入")
+                            coordinator.showToast("家庭邀请将在服务端同步接入")
                         }
                         .buttonStyle(PrimaryButtonStyle())
                     }
@@ -30,7 +30,7 @@ struct ProfileHomeView: View {
 
                 Section("偏好") {
                     settingRow("通知", icon: "bell", detail: "稍后设置")
-                    settingRow("离线数据", icon: "arrow.triangle.2.circlepath", detail: "样本模式")
+                    settingRow("离线数据", icon: "arrow.triangle.2.circlepath", detail: "已保存在本机")
                 }
             }
             .scrollContentBackground(.hidden)
