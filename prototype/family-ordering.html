@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>小家厨房 · 家庭点菜原型</title>
+  <style>
+    :root {
+      --cream: #fff8ed;
+      --paper: #ffffff;
+      --ink: #37332d;
+      --muted: #8c857b;
+      --green: #5f9b7a;
+      --green-soft: #e1f0e8;
+      --orange: #f7a54a;
+      --orange-soft: #fff0d7;
+      --red: #f06b54;
+      --red-soft: #ffe5df;
+      --line: #eee7dc;
+      --shadow: 0 12px 32px rgba(69, 51, 30, .1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at 8% 10%, #ffe6bd 0 7%, transparent 26%), #f4eee4;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", sans-serif;
+      color: var(--ink);
+    }
+    button { font: inherit; cursor: pointer; }
+    .phone {
+      width: min(100%, 430px);
+      min-height: 860px;
+      position: relative;
+      overflow: hidden;
+      background: var(--cream);
+      border: 9px solid #2e2c2a;
+      border-radius: 42px;
+      box-shadow: 0 28px 80px rgba(49, 38, 26, .26);
+    }
+    .island { width: 126px; height: 31px; border-radius: 22px; background: #202020; margin: 9px auto 0; }
+    .app { padding: 16px 20px 102px; }
+    .view { display: none; animation: enter .24s ease-out; }
+    .view.active { display: block; }
+    @keyframes enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .header { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 22px; }
+    .eyebrow { font-size: 12px; color: var(--muted); font-weight: 650; letter-spacing: .02em; }
+    h1 { margin: 3px 0 0; font-size: 28px; line-height: 1.1; letter-spacing: -.03em; }
+    h2 { margin: 0; font-size: 19px; letter-spacing: -.025em; }
+    h3 { margin: 0; font-size: 16px; letter-spacing: -.02em; }
+    .avatars { display: flex; align-items: center; }
+    .avatar { width: 31px; height: 31px; display: grid; place-items: center; border: 2px solid var(--cream); border-radius: 50%; margin-left: -7px; background: #ffd6bd; font-size: 15px; }
+    .avatar:first-child { margin-left: 0; background: #cce7d6; }
+    .avatar:nth-child(2) { background: #ffe5a8; }
+    .avatar.more { background: var(--ink); color: white; font-size: 11px; }
+    .section-title { display: flex; justify-content: space-between; align-items: baseline; margin: 24px 2px 12px; }
+    .link { border: 0; padding: 0; background: transparent; color: var(--green); font-weight: 700; font-size: 13px; }
+    .segmented { display: flex; gap: 8px; overflow: auto; scrollbar-width: none; padding: 0 0 2px; }
+    .segmented button { flex: 0 0 auto; border: 0; border-radius: 12px; padding: 9px 13px; color: var(--muted); background: #f3ecdf; font-size: 13px; font-weight: 700; }
+    .segmented button.selected { background: var(--ink); color: white; }
+    .today-card { position: relative; overflow: hidden; padding: 18px; border-radius: 24px; background: linear-gradient(135deg, #d7ecdf, #f9e4ba); }
+    .today-card::after { content: "🥢"; position: absolute; right: 16px; top: 13px; font-size: 46px; transform: rotate(-10deg); }
+    .badge { display: inline-flex; gap: 5px; align-items: center; border-radius: 99px; padding: 5px 9px; font-size: 11px; font-weight: 750; background: rgba(255,255,255,.65); }
+    .today-card h2 { margin-top: 12px; font-size: 21px; }
+    .today-card p { width: 78%; margin: 6px 0 15px; color: #5a655e; font-size: 13px; line-height: 1.45; }
+    .dish-line { display: flex; align-items: center; gap: 8px; }
+    .dish-bubble { width: 33px; height: 33px; border-radius: 11px; display: grid; place-items: center; background: #fff3dc; font-size: 19px; }
+    .dish-name { flex: 1; font-size: 14px; font-weight: 750; }
+    .status { border-radius: 99px; padding: 5px 8px; font-size: 11px; font-weight: 750; }
+    .status.green { background: var(--green-soft); color: #427258; }
+    .status.orange { background: var(--orange-soft); color: #a36a22; }
+    .status.red { background: var(--red-soft); color: #b7513f; }
+    .primary { border: 0; border-radius: 14px; padding: 12px 15px; background: var(--green); color: white; font-size: 14px; font-weight: 750; box-shadow: 0 6px 14px rgba(95,155,122,.22); }
+    .primary.compact { padding: 9px 12px; font-size: 13px; }
+    .recipes { display: grid; gap: 12px; }
+    .recipe-card { display: grid; grid-template-columns: 82px 1fr; gap: 13px; align-items: center; padding: 10px; border-radius: 20px; background: var(--paper); box-shadow: 0 5px 14px rgba(76, 60, 42, .05); }
+    .food { height: 82px; border-radius: 15px; display: grid; place-items: center; font-size: 42px; }
+    .food.red { background: #ffe0d1; } .food.yellow { background: #ffedbb; } .food.green { background: #dcefd4; } .food.purple { background: #e8def3; }
+    .recipe-info { min-width: 0; }
+    .recipe-name { display: flex; justify-content: space-between; gap: 5px; align-items: start; font-weight: 800; font-size: 16px; }
+    .recipe-meta { margin: 6px 0; font-size: 12px; color: var(--muted); }
+    .recipe-bottom { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+    .rating { color: #d68b21; font-weight: 750; }
+    .availability { color: #3e7656; font-weight: 700; }
+    .fab { position: absolute; right: 22px; bottom: 91px; width: 52px; height: 52px; border: 0; border-radius: 18px; color: white; background: var(--green); font-size: 26px; box-shadow: 0 12px 22px rgba(95,155,122,.32); }
+    .tabbar { position: absolute; left: 0; bottom: 0; width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); padding: 12px 12px 25px; background: rgba(255,255,255,.93); border-top: 1px solid var(--line); backdrop-filter: blur(16px); }
+    .tab { border: 0; background: none; color: #a29c94; display: grid; place-items: center; gap: 4px; font-size: 11px; font-weight: 700; }
+    .tab .icon { font-size: 22px; line-height: 1; }
+    .tab.active { color: var(--green); }
+    .stock-summary { display: grid; grid-template-columns: 1.4fr 1fr; gap: 11px; }
+    .summary-card { padding: 16px; border-radius: 21px; background: white; box-shadow: 0 4px 14px rgba(76,60,42,.05); }
+    .summary-card.green { color: #fff; background: var(--green); }
+    .summary-number { margin-top: 10px; font-size: 29px; font-weight: 800; letter-spacing: -.05em; }
+    .summary-label { font-size: 12px; color: var(--muted); font-weight: 650; }
+    .summary-card.green .summary-label { color: #d8eee0; }
+    .category-list { display: grid; gap: 9px; }
+    .pantry-row { display: flex; gap: 11px; align-items: center; padding: 11px 12px; background: white; border-radius: 17px; }
+    .pantry-icon { width: 39px; height: 39px; border-radius: 13px; display: grid; place-items: center; background: #f6efe4; font-size: 21px; }
+    .pantry-name { flex: 1; font-weight: 750; font-size: 14px; }
+    .pantry-count { color: var(--muted); font-size: 12px; }
+    .calendar { border-radius: 22px; padding: 14px 12px 10px; background: white; }
+    .weekdays, .dates { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+    .weekdays { color: var(--muted); font-size: 11px; font-weight: 700; margin-bottom: 7px; }
+    .date { min-height: 52px; padding: 3px 0; font-size: 13px; font-weight: 700; }
+    .date.muted { color: #cdc7bf; }
+    .date.today span { display: grid; place-items: center; margin: 0 auto 2px; width: 24px; height: 24px; border-radius: 50%; background: var(--green); color: white; }
+    .mini-dishes { display: flex; justify-content: center; margin-top: 2px; font-size: 11px; letter-spacing: -4px; }
+    .day-card { margin-top: 15px; padding: 16px; border-radius: 22px; background: var(--orange-soft); }
+    .day-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .timeline { display: grid; gap: 9px; }
+    .timeline-row { display: flex; gap: 10px; align-items: center; }
+    .timeline-time { width: 34px; color: #9f7d4d; font-size: 11px; font-weight: 800; }
+    .timeline-dish { flex: 1; font-size: 13px; font-weight: 750; }
+    .family-card { padding: 18px; border-radius: 24px; color: white; background: linear-gradient(135deg, #55685b, #7fa890); }
+    .family-card h2 { margin-top: 12px; }
+    .family-card p { margin: 6px 0 14px; color: #e1f1e5; font-size: 13px; }
+    .setting-list { border-radius: 20px; overflow: hidden; background: white; }
+    .setting { display: flex; align-items: center; gap: 11px; min-height: 53px; padding: 0 14px; border-bottom: 1px solid #f3eee7; font-size: 14px; font-weight: 650; }
+    .setting:last-child { border-bottom: 0; }
+    .setting span:nth-child(2) { flex: 1; }
+    .chevron { color: #c3bdb6; font-size: 18px; }
+    .overlay { position: absolute; inset: 0; display: none; align-items: flex-end; background: rgba(45,37,28,.32); z-index: 3; }
+    .overlay.open { display: flex; }
+    .sheet { width: 100%; padding: 20px 20px 34px; border-radius: 28px 28px 0 0; background: white; animation: sheet .24s ease-out; }
+    @keyframes sheet { from { transform: translateY(100%); } to { transform: none; } }
+    .sheet-head { display: flex; justify-content: space-between; align-items: center; }
+    .close { border: 0; width: 30px; height: 30px; border-radius: 50%; background: #f4efe7; color: var(--ink); font-size: 20px; }
+    .choice { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 11px; padding: 12px; border: 1px solid var(--line); border-radius: 17px; background: white; text-align: left; }
+    .choice-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: var(--green-soft); font-size: 20px; }
+    .choice strong { display: block; font-size: 14px; } .choice small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .toast { position: absolute; left: 50%; bottom: 92px; z-index: 5; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; padding: 10px 13px; white-space: nowrap; color: white; border-radius: 12px; background: var(--ink); font-size: 13px; font-weight: 650; transition: .22s; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    @media (max-width: 500px) { body { display: block; background: var(--cream); } .phone { width: 100%; min-height: 100vh; border: 0; border-radius: 0; box-shadow: none; } .island { margin-top: 0; } }
+  </style>
+</head>
+<body>
+  <main class="phone" aria-label="小家厨房家庭点菜原型">
+    <div class="island" aria-hidden="true"></div>
+    <div class="app">
+      <section class="view active" id="menu-view" aria-label="菜单">
+        <div class="header">
+          <div><div class="eyebrow">周二 · 9 月 2 日</div><h1>今天吃什么？</h1></div>
+          <div class="avatars" aria-label="家庭成员"><span class="avatar">👩🏻</span><span class="avatar">👨🏻</span><span class="avatar">🧒🏻</span></div>
+        </div>
+        <div class="today-card">
+          <span class="badge">👨🏻 阿远刚刚确认</span>
+          <h2>今晚的家庭菜单</h2>
+          <p>两道菜已安排。根据冰箱库存，还需要买 1 样食材。</p>
+          <div class="dish-line"><span class="dish-bubble">🍗</span><span class="dish-name">宫保鸡丁</span><span class="status green">食材齐全</span></div>
+          <div class="dish-line" style="margin-top:8px"><span class="dish-bubble">🥬</span><span class="dish-name">清炒时蔬</span><span class="status orange">缺西兰花</span></div>
+          <button class="primary" style="margin-top:16px" data-toast="已打开今天的菜单">查看今天菜单</button>
+        </div>
+        <div class="section-title"><h2>家庭正在点</h2><button class="link" data-toast="已查看全部点菜">查看全部</button></div>
+        <div class="segmented"><button class="selected">今天</button><button>我想吃</button><button>家庭常点</button><button>全部菜谱</button></div>
+        <div class="section-title"><h2>大家想吃的菜</h2><button class="link" data-toast="搜索菜谱">搜索</button></div>
+        <div class="recipes">
+          <article class="recipe-card"><div class="food red">🍅</div><div class="recipe-info"><div class="recipe-name">番茄牛腩 <span class="status orange">3 人想吃</span></div><div class="recipe-meta">家常菜 · 50 分钟 · 难度 2/5</div><div class="recipe-bottom"><span class="rating">★ 4.9 · 12 评</span><button class="link" data-toast="已帮你点了番茄牛腩">点这道</button></div></div></article>
+          <article class="recipe-card"><div class="food yellow">🥚</div><div class="recipe-info"><div class="recipe-name">虾仁蒸蛋 <span class="status green">库存可做</span></div><div class="recipe-meta">快手菜 · 20 分钟 · 难度 1/5</div><div class="recipe-bottom"><span class="rating">★ 4.8 · 8 评</span><button class="link" data-toast="已帮你点了虾仁蒸蛋">点这道</button></div></div></article>
+        </div>
+        <button class="fab" aria-label="新增" data-open-sheet>＋</button>
+      </section>
+
+      <section class="view" id="fridge-view" aria-label="冰箱">
+        <div class="header"><div><div class="eyebrow">小家厨房</div><h1>冰箱</h1></div><button class="primary compact" data-toast="添加食材">＋ 添加</button></div>
+        <div class="stock-summary"><div class="summary-card green"><div class="summary-label">现有食材</div><div class="summary-number">32</div><div style="font-size:12px;color:#d8eee0">本周已用 8 样</div></div><div class="summary-card"><div class="summary-label">需要留意</div><div class="summary-number" style="color:var(--red)">3</div><div style="font-size:12px;color:var(--muted)">2 样临期</div></div></div>
+        <div class="section-title"><h2>今晚菜单核对</h2><button class="link" data-tab="menu">查看菜谱</button></div>
+        <div class="recipe-card"><div class="food green">🥬</div><div class="recipe-info"><div class="recipe-name">清炒时蔬 <span class="status orange">差 1 样</span></div><div class="recipe-meta">西兰花缺少，已进入待购清单</div><div class="recipe-bottom"><span class="availability">其余 4 样充足</span><button class="link" data-toast="已加入待购清单">去购买</button></div></div></div>
+        <div class="section-title"><h2>按类别查看</h2><button class="link" data-toast="已打开所有食材">全部</button></div>
+        <div class="category-list">
+          <div class="pantry-row"><span class="pantry-icon">🥦</span><span class="pantry-name">蔬菜</span><span class="pantry-count">8 样</span><span class="chevron">›</span></div>
+          <div class="pantry-row"><span class="pantry-icon">🥩</span><span class="pantry-name">肉蛋奶</span><span class="pantry-count">6 样</span><span class="chevron">›</span></div>
+          <div class="pantry-row"><span class="pantry-icon">🍚</span><span class="pantry-name">主食</span><span class="pantry-count">5 样</span><span class="chevron">›</span></div>
+          <div class="pantry-row"><span class="pantry-icon">🧂</span><span class="pantry-name">调味料</span><span class="pantry-count">13 样</span><span class="chevron">›</span></div>
+        </div>
+      </section>
+
+      <section class="view" id="calendar-view" aria-label="日历">
+        <div class="header"><div><div class="eyebrow">2026 年</div><h1>九月菜单</h1></div><button class="primary compact" data-open-sheet>＋ 安排</button></div>
+        <div class="calendar"><div class="weekdays"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div><div class="dates">
+          <div class="date muted"><span>31</span></div><div class="date"><span>1</span><div class="mini-dishes">🍜</div></div><div class="date today"><span>2</span><div class="mini-dishes">🍗🥬</div></div><div class="date"><span>3</span></div><div class="date"><span>4</span><div class="mini-dishes">🍅</div></div><div class="date"><span>5</span></div><div class="date"><span>6</span></div>
+          <div class="date"><span>7</span></div><div class="date"><span>8</span></div><div class="date"><span>9</span></div><div class="date"><span>10</span><div class="mini-dishes">🥘</div></div><div class="date"><span>11</span></div><div class="date"><span>12</span></div><div class="date"><span>13</span></div>
+          <div class="date"><span>14</span></div><div class="date"><span>15</span></div><div class="date"><span>16</span></div><div class="date"><span>17</span></div><div class="date"><span>18</span></div><div class="date"><span>19</span></div><div class="date"><span>20</span></div>
+        </div></div>
+        <div class="day-card"><div class="day-card-head"><div><div class="eyebrow" style="color:#9f7d4d">今天 · 周二</div><h2 style="margin-top:2px">晚餐菜单</h2></div><span class="badge">已确认</span></div><div class="timeline"><div class="timeline-row"><span class="timeline-time">18:30</span><span class="dish-bubble">🍗</span><span class="timeline-dish">宫保鸡丁</span><span class="status green">齐全</span></div><div class="timeline-row"><span class="timeline-time">18:45</span><span class="dish-bubble">🥬</span><span class="timeline-dish">清炒时蔬</span><span class="status orange">差 1</span></div></div><button class="primary" style="width:100%;margin-top:15px" data-toast="已打开今日待购清单">查看待购清单（1）</button></div>
+        <div class="section-title"><h2>安排提示</h2></div><div class="pantry-row"><span class="pantry-icon">✨</span><span class="pantry-name">周五有 3 人想吃番茄牛腩</span><span class="chevron">›</span></div>
+      </section>
+
+      <section class="view" id="profile-view" aria-label="我的">
+        <div class="header"><div><div class="eyebrow">你好，林可</div><h1>我的</h1></div><span class="avatar" style="width:42px;height:42px;font-size:21px">👩🏻</span></div>
+        <div class="family-card"><span class="badge" style="color:var(--ink)">🏠 4 位成员</span><h2>林家的小厨房</h2><p>本周已一起吃了 9 道菜，新增了 3 个家庭好评。</p><div class="avatars"><span class="avatar">👩🏻</span><span class="avatar">👨🏻</span><span class="avatar">🧒🏻</span><span class="avatar more">＋1</span></div></div>
+        <div class="section-title"><h2>家庭协作</h2></div><div class="setting-list"><div class="setting"><span>👨‍👩‍👧‍👦</span><span>家庭成员</span><span class="chevron">›</span></div><div class="setting"><span>✉️</span><span>邀请成员</span><span class="chevron">›</span></div><div class="setting"><span>🕓</span><span>最近修改</span><span class="chevron">›</span></div></div>
+        <div class="section-title"><h2>偏好与设置</h2></div><div class="setting-list"><div class="setting"><span>❤️</span><span>我的忌口与偏好</span><span class="chevron">›</span></div><div class="setting"><span>🔔</span><span>提醒设置</span><span class="chevron">›</span></div><div class="setting"><span>⚙️</span><span>通用设置</span><span class="chevron">›</span></div></div>
+      </section>
+    </div>
+
+    <nav class="tabbar" aria-label="主要导航"><button class="tab" data-tab="fridge"><span class="icon">❄︎</span>冰箱</button><button class="tab active" data-tab="menu"><span class="icon">☷</span>菜单</button><button class="tab" data-tab="calendar"><span class="icon">▦</span>日历</button><button class="tab" data-tab="profile"><span class="icon">☺</span>我的</button></nav>
+    <div class="overlay" id="sheet"><div class="sheet"><div class="sheet-head"><h2>新增内容</h2><button class="close" aria-label="关闭">×</button></div><button class="choice" data-toast="开始新建菜谱"><span class="choice-icon">🍳</span><span><strong>新建菜谱</strong><small>按主菜、辅材、调味料和步骤填写</small></span></button><button class="choice" data-toast="开始安排当天菜单"><span class="choice-icon">📅</span><span><strong>安排当天菜单</strong><small>把想吃的菜放进具体日期</small></span></button><button class="choice" data-toast="开始录入冰箱食材"><span class="choice-icon">🥬</span><span><strong>录入冰箱食材</strong><small>同步更新菜谱可做状态</small></span></button></div></div>
+    <div class="toast" id="toast" role="status"></div>
+  </main>
+  <script>
+    const views = document.querySelectorAll('.view');
+    const tabs = document.querySelectorAll('.tab');
+    const sheet = document.getElementById('sheet');
+    const toast = document.getElementById('toast');
+    let toastTimer;
+    function show(viewName) {
+      views.forEach(view => view.classList.toggle('active', view.id === `${viewName}-view`));
+      tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.tab === viewName));
+    }
+    function message(text) {
+      toast.textContent = text;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+    document.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => show(button.dataset.tab)));
+    document.querySelectorAll('[data-open-sheet]').forEach(button => button.addEventListener('click', () => sheet.classList.add('open')));
+    document.querySelector('.close').addEventListener('click', () => sheet.classList.remove('open'));
+    sheet.addEventListener('click', event => { if (event.target === sheet) sheet.classList.remove('open'); });
+    document.querySelectorAll('[data-toast]').forEach(button => button.addEventListener('click', () => { message(button.dataset.toast); if (button.closest('.sheet')) sheet.classList.remove('open'); }));
+  </script>
+</body>
+</html>
