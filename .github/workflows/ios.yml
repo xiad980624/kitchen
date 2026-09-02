@@ -1,0 +1,20 @@
+name: iOS
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test LittleKitchen
+        run: >-
+          xcodebuild test
+          -project LittleKitchen/LittleKitchen.xcodeproj
+          -scheme LittleKitchen
+          -sdk iphonesimulator
+          -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest'
+          CODE_SIGNING_ALLOWED=NO
