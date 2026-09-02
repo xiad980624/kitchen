@@ -1,5 +1,5 @@
 # CloudKit 预留
 
-本轮只建立本地样本体验，不启用 CloudKit capability 或持久化模型。
+本轮不启用 CloudKit capability。设备端状态由 SwiftData 本地快照保存，支持离线读取和写入，并会将旧版 UserDefaults 数据迁移到本地数据存储。
 
-家庭共享将按开发蓝图采用「每个家庭一个 Custom Zone + zone-wide `CKShare`」：同步层以 actor 串行化访问，SwiftData 仅作为设备缓存与离线草稿。最终 Bundle ID 和 CloudKit Container 确定后，再在独立分支中接入。
+若接入家庭共享，后续同步层将以 actor 串行化访问，并把远端数据投影回 SwiftData 本地缓存。服务端方案与最终发布配置确定后，再在独立分支中接入。
