@@ -28,6 +28,10 @@ struct CalendarHomeView: View {
         kitchenStore.recipes(for: .now)
     }
 
+    private var isTodayMenuCompleted: Bool {
+        kitchenStore.isMenuCompleted()
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -84,9 +88,10 @@ struct CalendarHomeView: View {
                             .background(day == currentDay ? AppTheme.sage : .clear)
                             .foregroundStyle(day == currentDay ? .white : AppTheme.ink)
                             .clipShape(Circle())
-                        if day == currentDay, let recipe = todayRecipes.first {
-                            Text(recipe.emoji)
+                        if day == currentDay, !todayRecipes.isEmpty {
+                            Image(systemName: isTodayMenuCompleted ? "checkmark.circle.fill" : "fork.knife.circle.fill")
                                 .font(.caption2)
+                                .foregroundStyle(isTodayMenuCompleted ? AppTheme.sage : AppTheme.carrot)
                         } else {
                             Color.clear.frame(height: 12)
                         }
@@ -105,13 +110,19 @@ struct CalendarHomeView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("今天 · \(Date.now.formatted(.dateTime.month().day()))")
                         .font(.title3.weight(.bold))
-                    Text(todayRecipes.isEmpty ? "等待安排" : "今日菜单")
+                    Text(todayRecipes.isEmpty ? "等待安排" : (isTodayMenuCompleted ? "今日菜单已完成" : "今日菜单"))
                         .font(.subheadline)
-                        .foregroundStyle(todayRecipes.isEmpty ? AppTheme.muted : AppTheme.sage)
+                        .foregroundStyle(todayRecipes.isEmpty ? AppTheme.muted : (isTodayMenuCompleted ? AppTheme.sage : AppTheme.carrot))
                 }
                 Spacer()
-                Button("完成") {
-                    coordinator.showToast("今晚菜单已标为完成")
+                Button(isTodayMenuCompleted ? "撤销完成" : "完成") {
+                    if isTodayMenuCompleted {
+                        kitchenStore.reopenMenu()
+                        coordinator.showToast("已恢复今天菜单")
+                    } else {
+                        kitchenStore.completeMenu()
+                        coordinator.showToast("今晚菜单已标为完成")
+                    }
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(todayRecipes.isEmpty)
@@ -131,6 +142,11 @@ struct CalendarHomeView: View {
                             .font(.title2)
                         Text(recipe.title)
                             .font(.subheadline.weight(.bold))
+                        if isTodayMenuCompleted {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(AppTheme.sage)
+                                .accessibilityLabel("已完成")
+                        }
                         Spacer()
                         Button {
                             kitchenStore.removeFromSchedule(recipe)

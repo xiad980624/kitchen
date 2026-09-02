@@ -7,6 +7,7 @@ struct KitchenSnapshot: Codable {
     let reviews: [RecipeReview]
     let pantryItems: [PantryItem]
     let scheduledRecipeIDsByDate: [String: [UUID]]
+    let completedRecipeIDsByDate: [String: [UUID]]
     let revisions: [RecipeRevision]
 
     init(
@@ -15,6 +16,7 @@ struct KitchenSnapshot: Codable {
         reviews: [RecipeReview],
         pantryItems: [PantryItem],
         scheduledRecipeIDsByDate: [String: [UUID]],
+        completedRecipeIDsByDate: [String: [UUID]] = [:],
         revisions: [RecipeRevision] = []
     ) {
         self.recipes = recipes
@@ -22,6 +24,7 @@ struct KitchenSnapshot: Codable {
         self.reviews = reviews
         self.pantryItems = pantryItems
         self.scheduledRecipeIDsByDate = scheduledRecipeIDsByDate
+        self.completedRecipeIDsByDate = completedRecipeIDsByDate
         self.revisions = revisions
     }
 
@@ -31,6 +34,7 @@ struct KitchenSnapshot: Codable {
         case reviews
         case pantryItems
         case scheduledRecipeIDsByDate
+        case completedRecipeIDsByDate
         case revisions
     }
 
@@ -41,6 +45,7 @@ struct KitchenSnapshot: Codable {
         reviews = try container.decode([RecipeReview].self, forKey: .reviews)
         pantryItems = try container.decode([PantryItem].self, forKey: .pantryItems)
         scheduledRecipeIDsByDate = try container.decode([String: [UUID]].self, forKey: .scheduledRecipeIDsByDate)
+        completedRecipeIDsByDate = try container.decodeIfPresent([String: [UUID]].self, forKey: .completedRecipeIDsByDate) ?? [:]
         revisions = try container.decodeIfPresent([RecipeRevision].self, forKey: .revisions) ?? []
     }
 }
@@ -162,6 +167,7 @@ enum LegacyKitchenSnapshotLoader {
             reviews: decode([RecipeReview].self, key: reviewsKey, defaults: defaults) ?? [],
             pantryItems: decode([PantryItem].self, key: pantryKey, defaults: defaults) ?? SampleData.pantryItems,
             scheduledRecipeIDsByDate: decode([String: [UUID]].self, key: mealPlanKey, defaults: defaults) ?? defaultSchedule,
+            completedRecipeIDsByDate: [:],
             revisions: []
         )
     }
