@@ -40,7 +40,7 @@ struct MenuHomeView: View {
                 Text("林家厨房")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.muted)
-                Text("周二 · 9 月 2 日")
+                Text(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
                     .font(.caption)
                     .foregroundStyle(AppTheme.muted)
             }
@@ -71,6 +71,7 @@ struct MenuHomeView: View {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(AppTheme.line, lineWidth: selectedSection == section ? 0 : 1)
                     }
+                    .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
                 }
             }
         }
@@ -83,18 +84,26 @@ struct MenuHomeView: View {
                 Text(selectedSection == "今天" ? "大家想吃的菜" : selectedSection)
                     .font(.title3.weight(.bold))
                 Spacer()
-                Button("搜索") {
-                    coordinator.showToast("搜索将在下一轮接入")
-                }
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(AppTheme.sage)
+                Text("\(filteredRecipes.count) 道")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.muted)
             }
 
-            ForEach(filteredRecipes) { recipe in
-                NavigationLink(value: recipe) {
-                    RecipeRow(recipe: recipe)
+            if filteredRecipes.isEmpty {
+                EmptyStateCard(
+                    symbol: searchText.isEmpty ? "heart" : "magnifyingglass",
+                    title: searchText.isEmpty ? "还没有想吃的菜" : "没有找到匹配的菜谱",
+                    message: searchText.isEmpty ? "在菜谱详情点“我想吃”，它会显示在这里。" : "换个菜名、食材或分类试试。",
+                    actionTitle: searchText.isEmpty ? nil : "清除搜索",
+                    action: searchText.isEmpty ? nil : { searchText = "" }
+                )
+            } else {
+                ForEach(filteredRecipes) { recipe in
+                    NavigationLink(value: recipe) {
+                        RecipeRow(recipe: recipe)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -108,6 +117,7 @@ struct MenuHomeView: View {
         .padding(12)
         .background(AppTheme.paper)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityLabel("搜索菜谱")
     }
 
     private var filteredRecipes: [Recipe] {
@@ -131,10 +141,23 @@ struct MenuHomeView: View {
 
 private struct TodayMenuCard: View {
     @EnvironmentObject private var coordinator: AppCoordinator
+    @EnvironmentObject private var kitchenStore: LocalKitchenStore
+
+    private var plannedRecipes: [Recipe] {
+        kitchenStore.recipes(for: .now)
+    }
+
+    private var menuSummary: String {
+        guard !plannedRecipes.isEmpty else { return "从菜谱列表安排一道菜，开始准备今晚的菜单。" }
+        if kitchenStore.shoppingList.isEmpty {
+            return "已安排 \(plannedRecipes.count) 道菜，冰箱库存都够用。"
+        }
+        return "已安排 \(plannedRecipes.count) 道菜，还需要买 \(kitchenStore.shoppingList.count) 样食材。"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("阿远刚刚确认", systemImage: "checkmark.circle.fill")
+            Label(plannedRecipes.isEmpty ? "等待安排" : "今日菜单", systemImage: plannedRecipes.isEmpty ? "calendar.badge.plus" : "checkmark.circle.fill")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppTheme.ink)
                 .padding(.horizontal, 10)
@@ -142,16 +165,17 @@ private struct TodayMenuCard: View {
                 .background(.white.opacity(0.72))
                 .clipShape(Capsule())
 
-            Text("今晚的家庭菜单")
+            Text(plannedRecipes.isEmpty ? "今晚吃什么？" : "今晚的家庭菜单")
                 .font(.title3.weight(.bold))
-            Text("两道菜已安排。根据冰箱库存，还需要买 1 样食材。")
+            Text(menuSummary)
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.ink.opacity(0.72))
 
-            MenuDishLine(emoji: "🍗", title: "宫保鸡丁", availability: .ready)
-            MenuDishLine(emoji: "🥬", title: "清炒时蔬", availability: .short)
+            ForEach(plannedRecipes) { recipe in
+                MenuDishLine(emoji: recipe.emoji, title: recipe.title, availability: recipe.availability)
+            }
 
-            Button("查看今天菜单") {
+            Button(plannedRecipes.isEmpty ? "去安排菜谱" : "查看今天菜单") {
                 coordinator.selectedTab = .calendar
             }
             .buttonStyle(PrimaryButtonStyle())
@@ -166,7 +190,7 @@ private struct TodayMenuCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("今晚的家庭菜单，两道菜已安排，还需要买一项食材")
+        .accessibilityLabel("今晚菜单，\(menuSummary)")
     }
 }
 
@@ -224,6 +248,7 @@ struct RecipeRow: View {
         .padding(10)
         .appCard()
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(recipe.title)，\(recipe.category.rawValue)，\(recipe.duration) 分钟，\(recipe.availability.rawValue)")
     }
 }
 

@@ -5,7 +5,28 @@ struct CalendarHomeView: View {
     @EnvironmentObject private var kitchenStore: LocalKitchenStore
 
     private let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
-    private let days = Array(1...30)
+
+    private var currentDay: Int {
+        Calendar.current.component(.day, from: .now)
+    }
+
+    private var monthStart: Date {
+        Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: .now)) ?? .now
+    }
+
+    private var days: [Int] {
+        let range = Calendar.current.range(of: .day, in: .month, for: monthStart) ?? 1..<31
+        return Array(range)
+    }
+
+    private var firstWeekdayOffset: Int {
+        let weekday = Calendar.current.component(.weekday, from: monthStart)
+        return (weekday - Calendar.current.firstWeekday + 7) % 7
+    }
+
+    private var todayRecipes: [Recipe] {
+        kitchenStore.recipes(for: .now)
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,21 +39,15 @@ struct CalendarHomeView: View {
                 .padding(.bottom, 28)
             }
             .background(AppTheme.cream.ignoresSafeArea())
-            .navigationTitle("九月菜单")
+            .navigationTitle("\(Date.now.formatted(.dateTime.month(.wide)))菜单")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        guard let recipe = kitchenStore.recipes.first(where: { candidate in
-                            !kitchenStore.recipes(for: .now).contains(candidate)
-                        }) else {
-                            coordinator.showToast("今天的菜谱已全部安排")
-                            return
-                        }
-                        kitchenStore.schedule(recipe)
-                        coordinator.showToast("已将\(recipe.title)安排到今天")
+                        scheduleNextRecipe()
                     } label: {
                         Label("安排", systemImage: "plus")
                     }
+                    .accessibilityLabel("安排一道菜到今天菜单")
                 }
             }
         }
@@ -41,7 +56,7 @@ struct CalendarHomeView: View {
     private var calendarCard: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("2026 年 9 月")
+                Text(Date.now.formatted(.dateTime.year().month(.wide)))
                     .font(.headline)
                 Spacer()
                 Image(systemName: "chevron.left")
@@ -56,22 +71,27 @@ struct CalendarHomeView: View {
                         .font(.caption.weight(.bold))
                         .foregroundStyle(AppTheme.muted)
                 }
+                ForEach(0..<firstWeekdayOffset, id: \.self) { _ in
+                    Color.clear
+                        .frame(height: 40)
+                        .accessibilityHidden(true)
+                }
                 ForEach(days, id: \.self) { day in
                     VStack(spacing: 3) {
                         Text("\(day)")
-                            .font(.caption.weight(day == 2 ? .bold : .regular))
+                            .font(.caption.weight(day == currentDay ? .bold : .regular))
                             .frame(width: 28, height: 28)
-                            .background(day == 2 ? AppTheme.sage : .clear)
-                            .foregroundStyle(day == 2 ? .white : AppTheme.ink)
+                            .background(day == currentDay ? AppTheme.sage : .clear)
+                            .foregroundStyle(day == currentDay ? .white : AppTheme.ink)
                             .clipShape(Circle())
-                        if [2, 5, 12, 18].contains(day) {
-                            Text(day == 2 ? "🍗" : "•")
+                        if day == currentDay, let recipe = todayRecipes.first {
+                            Text(recipe.emoji)
                                 .font(.caption2)
                         } else {
                             Color.clear.frame(height: 12)
                         }
                     }
-                    .accessibilityLabel("9 月 \(day) 日")
+                    .accessibilityLabel(date(for: day).formatted(.dateTime.month().day().weekday(.wide)))
                 }
             }
         }
@@ -83,44 +103,65 @@ struct CalendarHomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("今天 · 9 月 2 日")
+                    Text("今天 · \(Date.now.formatted(.dateTime.month().day()))")
                         .font(.title3.weight(.bold))
-                    Text("已确认菜单")
+                    Text(todayRecipes.isEmpty ? "等待安排" : "今日菜单")
                         .font(.subheadline)
-                        .foregroundStyle(AppTheme.sage)
+                        .foregroundStyle(todayRecipes.isEmpty ? AppTheme.muted : AppTheme.sage)
                 }
                 Spacer()
                 Button("完成") {
                     coordinator.showToast("今晚菜单已标为完成")
                 }
                 .buttonStyle(PrimaryButtonStyle())
+                .disabled(todayRecipes.isEmpty)
             }
-            if kitchenStore.recipes(for: .now).isEmpty {
-                Text("还没有安排菜谱")
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.muted)
-            }
-            ForEach(kitchenStore.recipes(for: .now)) { recipe in
-                HStack {
-                    Text(recipe.emoji)
-                        .font(.title2)
-                    Text(recipe.title)
-                        .font(.subheadline.weight(.bold))
-                    Spacer()
-                    Button {
-                        kitchenStore.removeFromSchedule(recipe)
-                        coordinator.showToast("已从今天菜单移除")
-                    } label: {
-                        Image(systemName: "minus.circle")
-                            .foregroundStyle(AppTheme.tomato)
+            if todayRecipes.isEmpty {
+                EmptyStateCard(
+                    symbol: "calendar.badge.plus",
+                    title: "还没有安排菜谱",
+                    message: "从已有菜谱中安排一道菜，系统就会开始核对冰箱库存。",
+                    actionTitle: "安排一道菜",
+                    action: scheduleNextRecipe
+                )
+            } else {
+                ForEach(todayRecipes) { recipe in
+                    HStack {
+                        Text(recipe.emoji)
+                            .font(.title2)
+                        Text(recipe.title)
+                            .font(.subheadline.weight(.bold))
+                        Spacer()
+                        Button {
+                            kitchenStore.removeFromSchedule(recipe)
+                            coordinator.showToast("已从今天菜单移除")
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .foregroundStyle(AppTheme.tomato)
+                        }
+                        .accessibilityLabel("移除\(recipe.title)")
                     }
-                    .accessibilityLabel("移除\(recipe.title)")
+                    .padding(.vertical, 7)
                 }
-                .padding(.vertical, 7)
             }
         }
         .padding(17)
         .background(AppTheme.carrotSoft)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func scheduleNextRecipe() {
+        guard let recipe = kitchenStore.recipes.first(where: { candidate in
+            !todayRecipes.contains(candidate)
+        }) else {
+            coordinator.showToast("今天的菜谱已全部安排")
+            return
+        }
+        kitchenStore.schedule(recipe)
+        coordinator.showToast("已将\(recipe.title)安排到今天")
+    }
+
+    private func date(for day: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: day - 1, to: monthStart) ?? monthStart
     }
 }
