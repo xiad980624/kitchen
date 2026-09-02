@@ -1,6 +1,6 @@
 import Foundation
 
-enum RecipeCategory: String, CaseIterable, Identifiable, Hashable {
+enum RecipeCategory: String, CaseIterable, Identifiable, Hashable, Codable {
     case homestyle = "家常菜"
     case quick = "快手菜"
     case soup = "汤羹"
@@ -9,13 +9,13 @@ enum RecipeCategory: String, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
 }
 
-enum IngredientKind: String, CaseIterable, Hashable {
+enum IngredientKind: String, CaseIterable, Hashable, Codable {
     case main = "主菜"
     case side = "辅材"
     case seasoning = "调味料"
 }
 
-struct RecipeIngredient: Identifiable, Hashable {
+struct RecipeIngredient: Identifiable, Hashable, Codable {
     let id: UUID
     let name: String
     let quantity: String
@@ -29,13 +29,13 @@ struct RecipeIngredient: Identifiable, Hashable {
     }
 }
 
-enum RecipeAvailability: String, Hashable {
+enum RecipeAvailability: String, Hashable, Codable {
     case ready = "食材齐全"
     case short = "缺少食材"
     case check = "待确认"
 }
 
-struct Recipe: Identifiable, Hashable {
+struct Recipe: Identifiable, Hashable, Codable {
     let id: UUID
     let title: String
     let category: RecipeCategory
@@ -79,7 +79,7 @@ struct Recipe: Identifiable, Hashable {
     }
 }
 
-struct PantryItem: Identifiable, Hashable {
+struct PantryItem: Identifiable, Hashable, Codable {
     let id: UUID
     let name: String
     let emoji: String
@@ -94,5 +94,21 @@ struct PantryItem: Identifiable, Hashable {
         self.category = category
         self.quantity = quantity
         self.expiryHint = expiryHint
+    }
+}
+
+struct RecipeReview: Identifiable, Hashable, Codable {
+    let id: UUID
+    let recipeID: UUID
+    let rating: Int
+    let comment: String
+    let updatedAt: Date
+
+    init(id: UUID = UUID(), recipeID: UUID, rating: Int, comment: String, updatedAt: Date = .now) {
+        self.id = id
+        self.recipeID = recipeID
+        self.rating = rating
+        self.comment = comment
+        self.updatedAt = updatedAt
     }
 }

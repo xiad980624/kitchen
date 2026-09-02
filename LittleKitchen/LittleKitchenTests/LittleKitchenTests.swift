@@ -22,4 +22,35 @@ final class LittleKitchenTests: XCTestCase {
 
         XCTAssertEqual(ids.count, SampleData.recipes.count)
     }
+
+    @MainActor
+    func testVotePersistsInLocalCache() {
+        let defaults = makeDefaults()
+        let recipe = LocalKitchenStore(defaults: defaults).recipes[0]
+
+        let store = LocalKitchenStore(defaults: defaults)
+        store.toggleVote(for: recipe)
+
+        XCTAssertTrue(LocalKitchenStore(defaults: defaults).isVoted(recipe))
+    }
+
+    @MainActor
+    func testReviewPersistsInLocalCache() {
+        let defaults = makeDefaults()
+        let recipe = LocalKitchenStore(defaults: defaults).recipes[0]
+        let store = LocalKitchenStore(defaults: defaults)
+
+        store.saveReview(recipeID: recipe.id, rating: 5, comment: "做得很好吃")
+
+        let savedReview = LocalKitchenStore(defaults: defaults).review(for: recipe)
+        XCTAssertEqual(savedReview?.rating, 5)
+        XCTAssertEqual(savedReview?.comment, "做得很好吃")
+    }
+
+    private func makeDefaults() -> UserDefaults {
+        let suiteName = "LittleKitchenTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
 }
