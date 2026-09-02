@@ -116,10 +116,56 @@ final class LocalKitchenStore: ObservableObject {
         persistSnapshot()
     }
 
-    func addPantryItem(name: String, category: String = "其他") {
+    @discardableResult
+    func addPantryItem(
+        name: String,
+        category: String = "其他",
+        quantity: String = "待填写",
+        expiryHint: String? = nil
+    ) -> Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !pantryItems.contains(where: { $0.name == trimmed }) else { return }
-        pantryItems.insert(PantryItem(name: trimmed, emoji: "🛒", category: category, quantity: "待填写"), at: 0)
+        guard !trimmed.isEmpty, !pantryItems.contains(where: { $0.name == trimmed }) else { return false }
+        pantryItems.insert(
+            PantryItem(
+                name: trimmed,
+                emoji: "🛒",
+                category: normalizedPantryField(category, fallback: "其他"),
+                quantity: normalizedPantryField(quantity, fallback: "待填写"),
+                expiryHint: normalizedExpiryHint(expiryHint)
+            ),
+            at: 0
+        )
+        persistSnapshot()
+        return true
+    }
+
+    @discardableResult
+    func updatePantryItem(
+        _ item: PantryItem,
+        name: String,
+        category: String,
+        quantity: String,
+        expiryHint: String?
+    ) -> Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let index = pantryItems.firstIndex(where: { $0.id == item.id }),
+              !trimmedName.isEmpty,
+              !pantryItems.contains(where: { $0.id != item.id && $0.name == trimmedName }) else { return false }
+
+        pantryItems[index] = PantryItem(
+            id: item.id,
+            name: trimmedName,
+            emoji: item.emoji,
+            category: normalizedPantryField(category, fallback: "其他"),
+            quantity: normalizedPantryField(quantity, fallback: "待填写"),
+            expiryHint: normalizedExpiryHint(expiryHint)
+        )
+        persistSnapshot()
+        return true
+    }
+
+    func removePantryItem(_ item: PantryItem) {
+        pantryItems.removeAll { $0.id == item.id }
         persistSnapshot()
     }
 
@@ -170,6 +216,17 @@ final class LocalKitchenStore: ObservableObject {
         if previousRecipe.steps != recipe.steps { changes.append("步骤") }
 
         return changes.isEmpty ? "更新了“\(recipe.title)”" : "修改了\(changes.joined(separator: "、"))"
+    }
+
+    private func normalizedPantryField(_ value: String, fallback: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
+    private func normalizedExpiryHint(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static var sampleSnapshot: KitchenSnapshot {

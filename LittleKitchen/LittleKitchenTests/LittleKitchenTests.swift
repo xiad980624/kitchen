@@ -99,6 +99,32 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
+    func testEditingAndRemovingPantryItemPersists() throws {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let item = try XCTUnwrap(store.pantryItems.first)
+
+        XCTAssertTrue(
+            store.updatePantryItem(
+                item,
+                name: "新鲜鸡蛋",
+                category: "肉蛋奶",
+                quantity: "6 个",
+                expiryHint: "本周吃完"
+            )
+        )
+
+        let updatedItem = try XCTUnwrap(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).pantryItems.first)
+        XCTAssertEqual(updatedItem.name, "新鲜鸡蛋")
+        XCTAssertEqual(updatedItem.quantity, "6 个")
+        XCTAssertEqual(updatedItem.expiryHint, "本周吃完")
+
+        store.removePantryItem(updatedItem)
+
+        XCTAssertFalse(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).pantryItems.contains(where: { $0.id == item.id }))
+    }
+
+    @MainActor
     func testLegacyUserDefaultsDataMigratesIntoLocalStore() throws {
         let defaults = makeDefaults()
         let legacyRecipe = Recipe(

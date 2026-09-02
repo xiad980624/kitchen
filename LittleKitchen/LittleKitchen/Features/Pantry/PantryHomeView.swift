@@ -4,7 +4,12 @@ struct PantryHomeView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @EnvironmentObject private var kitchenStore: LocalKitchenStore
     @State private var isPresentingAddItem = false
+    @State private var itemBeingEdited: PantryItem?
+    @State private var itemPendingRemoval: PantryItem?
     @State private var newItemName = ""
+    @State private var newItemCategory = "其他"
+    @State private var newItemQuantity = ""
+    @State private var newItemExpiryHint = ""
 
     var body: some View {
         NavigationStack {
@@ -23,7 +28,7 @@ struct PantryHomeView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        isPresentingAddItem = true
+                        presentNewItemEditor()
                     } label: {
                         Label("添加", systemImage: "plus")
                     }
@@ -36,22 +41,43 @@ struct PantryHomeView: View {
                 Form {
                     TextField("食材名称", text: $newItemName)
                         .accessibilityLabel("食材名称")
+                    TextField("分类，例如蔬菜", text: $newItemCategory)
+                        .accessibilityLabel("食材分类")
+                    TextField("数量，例如 2 根", text: $newItemQuantity)
+                        .accessibilityLabel("食材数量")
+                    TextField("临期提醒（可选）", text: $newItemExpiryHint)
+                        .accessibilityLabel("临期提醒")
                 }
-                .navigationTitle("添加食材")
+                .navigationTitle(itemBeingEdited == nil ? "添加食材" : "编辑食材")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { isPresentingAddItem = false }
+                        Button("取消") { dismissItemEditor() }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("入库") {
-                            kitchenStore.addPantryItem(name: newItemName)
-                            newItemName = ""
-                            isPresentingAddItem = false
-                            coordinator.showToast("食材已加入冰箱")
+                        Button(itemBeingEdited == nil ? "入库" : "保存") {
+                            saveItemEditor()
                         }
+                        .disabled(newItemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "从冰箱移除\(itemPendingRemoval?.name ?? "")？",
+            isPresented: Binding(
+                get: { itemPendingRemoval != nil },
+                set: { if !$0 { itemPendingRemoval = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("移除", role: .destructive) {
+                guard let itemPendingRemoval else { return }
+                kitchenStore.removePantryItem(itemPendingRemoval)
+                coordinator.showToast("已从冰箱移除\(itemPendingRemoval.name)")
+                self.itemPendingRemoval = nil
+            }
+        } message: {
+            Text("移除后，待购清单会按最新库存重新计算。")
         }
     }
 
@@ -145,6 +171,19 @@ struct PantryHomeView: View {
                         Text(item.quantity)
                             .font(.subheadline)
                             .foregroundStyle(AppTheme.muted)
+                        Menu {
+                            Button("编辑") {
+                                presentItemEditor(for: item)
+                            }
+                            Button("移除", role: .destructive) {
+                                itemPendingRemoval = item
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.title3)
+                                .foregroundStyle(AppTheme.muted)
+                        }
+                        .accessibilityLabel("管理\(item.name)")
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -198,5 +237,55 @@ struct PantryHomeView: View {
     private func tonightCheckMessage(hasPlannedRecipes: Bool) -> String {
         guard hasPlannedRecipes else { return "在日历安排菜谱后，这里会自动核对冰箱库存。" }
         return kitchenStore.shoppingList.isEmpty ? "冰箱库存已满足今天菜单。" : "缺少食材已自动汇总到下方待购清单。"
+    }
+
+    private func presentNewItemEditor() {
+        itemBeingEdited = nil
+        newItemName = ""
+        newItemCategory = "其他"
+        newItemQuantity = ""
+        newItemExpiryHint = ""
+        isPresentingAddItem = true
+    }
+
+    private func presentItemEditor(for item: PantryItem) {
+        itemBeingEdited = item
+        newItemName = item.name
+        newItemCategory = item.category
+        newItemQuantity = item.quantity
+        newItemExpiryHint = item.expiryHint ?? ""
+        isPresentingAddItem = true
+    }
+
+    private func saveItemEditor() {
+        let didSave: Bool
+        if let itemBeingEdited {
+            didSave = kitchenStore.updatePantryItem(
+                itemBeingEdited,
+                name: newItemName,
+                category: newItemCategory,
+                quantity: newItemQuantity,
+                expiryHint: newItemExpiryHint
+            )
+        } else {
+            didSave = kitchenStore.addPantryItem(
+                name: newItemName,
+                category: newItemCategory,
+                quantity: newItemQuantity,
+                expiryHint: newItemExpiryHint
+            )
+        }
+
+        guard didSave else {
+            coordinator.showToast("食材名称不能为空，且不能重复")
+            return
+        }
+        coordinator.showToast(itemBeingEdited == nil ? "食材已加入冰箱" : "食材信息已更新")
+        dismissItemEditor()
+    }
+
+    private func dismissItemEditor() {
+        isPresentingAddItem = false
+        itemBeingEdited = nil
     }
 }
