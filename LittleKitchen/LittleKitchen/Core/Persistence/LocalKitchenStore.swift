@@ -9,6 +9,8 @@ final class LocalKitchenStore: ObservableObject {
     @Published private(set) var pantryItems: [PantryItem]
     @Published private(set) var scheduledRecipeIDsByDate: [String: [UUID]]
     @Published private(set) var completedRecipeIDsByDate: [String: [UUID]]
+    @Published private(set) var manualShoppingItems: [ShoppingItem]
+    @Published private(set) var checkedAutomaticShoppingItemNames: Set<String>
     @Published private(set) var revisions: [RecipeRevision]
 
     private let persistence: any KitchenSnapshotPersisting
@@ -28,6 +30,8 @@ final class LocalKitchenStore: ObservableObject {
         pantryItems = snapshot.pantryItems
         scheduledRecipeIDsByDate = snapshot.scheduledRecipeIDsByDate
         completedRecipeIDsByDate = snapshot.completedRecipeIDsByDate
+        manualShoppingItems = snapshot.manualShoppingItems
+        checkedAutomaticShoppingItemNames = Set(snapshot.checkedAutomaticShoppingItemNames)
         revisions = snapshot.revisions
 
         if persistedSnapshot == nil {
@@ -93,6 +97,17 @@ final class LocalKitchenStore: ObservableObject {
         let key = Self.dateKey(for: date)
         scheduledRecipeIDsByDate[key]?.removeAll { $0 == recipe.id }
         completedRecipeIDsByDate[key]?.removeAll { $0 == recipe.id }
+        persistSnapshot()
+    }
+
+    func moveScheduledRecipe(_ recipe: Recipe, by offset: Int, for date: Date = .now) {
+        let key = Self.dateKey(for: date)
+        guard var ids = scheduledRecipeIDsByDate[key],
+              let currentIndex = ids.firstIndex(of: recipe.id) else { return }
+        let destinationIndex = currentIndex + offset
+        guard ids.indices.contains(destinationIndex) else { return }
+        ids.swapAt(currentIndex, destinationIndex)
+        scheduledRecipeIDsByDate[key] = ids
         persistSnapshot()
     }
 
@@ -170,6 +185,54 @@ final class LocalKitchenStore: ObservableObject {
     }
 
     var shoppingList: [String] {
+        missingIngredientNames
+    }
+
+    var shoppingItems: [ShoppingListEntry] {
+        let automaticItems = missingIngredientNames.map { name in
+            ShoppingListEntry(
+                id: "automatic:\(normalizedShoppingName(name))",
+                name: name,
+                isManual: false,
+                isChecked: checkedAutomaticShoppingItemNames.contains(normalizedShoppingName(name))
+            )
+        }
+        let manualItems = manualShoppingItems.map { item in
+            ShoppingListEntry(id: "manual:\(item.id.uuidString)", name: item.name, isManual: true, isChecked: item.isChecked)
+        }
+        return automaticItems + manualItems
+    }
+
+    @discardableResult
+    func addShoppingItem(name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !manualShoppingItems.contains(where: { $0.name == trimmed }) else { return false }
+        manualShoppingItems.append(ShoppingItem(name: trimmed))
+        persistSnapshot()
+        return true
+    }
+
+    func toggleShoppingItem(_ item: ShoppingListEntry) {
+        if item.isManual, let index = manualShoppingItems.firstIndex(where: { "manual:\($0.id.uuidString)" == item.id }) {
+            manualShoppingItems[index].isChecked.toggle()
+        } else {
+            let key = normalizedShoppingName(item.name)
+            if checkedAutomaticShoppingItemNames.contains(key) {
+                checkedAutomaticShoppingItemNames.remove(key)
+            } else {
+                checkedAutomaticShoppingItemNames.insert(key)
+            }
+        }
+        persistSnapshot()
+    }
+
+    func removeShoppingItem(_ item: ShoppingListEntry) {
+        guard item.isManual else { return }
+        manualShoppingItems.removeAll { "manual:\($0.id.uuidString)" == item.id }
+        persistSnapshot()
+    }
+
+    private var missingIngredientNames: [String] {
         let stocked = Set(pantryItems.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) })
         return Array(Set(recipes(for: .now).flatMap(\.ingredients).map(\.name).filter { !stocked.contains($0) })).sorted()
     }
@@ -189,6 +252,8 @@ final class LocalKitchenStore: ObservableObject {
                 pantryItems: pantryItems,
                 scheduledRecipeIDsByDate: scheduledRecipeIDsByDate,
                 completedRecipeIDsByDate: completedRecipeIDsByDate,
+                manualShoppingItems: manualShoppingItems,
+                checkedAutomaticShoppingItemNames: checkedAutomaticShoppingItemNames.sorted(),
                 revisions: revisions
             )
         )
@@ -229,6 +294,10 @@ final class LocalKitchenStore: ObservableObject {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private func normalizedShoppingName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
     private static var sampleSnapshot: KitchenSnapshot {
         KitchenSnapshot(
             recipes: SampleData.recipes,
@@ -237,6 +306,8 @@ final class LocalKitchenStore: ObservableObject {
             pantryItems: SampleData.pantryItems,
             scheduledRecipeIDsByDate: [dateKey(for: .now): Array(SampleData.recipes.prefix(2).map(\.id))],
             completedRecipeIDsByDate: [:],
+            manualShoppingItems: [],
+            checkedAutomaticShoppingItemNames: [],
             revisions: []
         )
     }

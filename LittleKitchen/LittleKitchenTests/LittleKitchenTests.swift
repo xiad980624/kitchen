@@ -99,6 +99,41 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
+    func testShoppingItemsCanBeCheckedAndManualItemsPersist() throws {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let automaticItem = try XCTUnwrap(store.shoppingItems.first(where: { !$0.isManual }))
+
+        store.toggleShoppingItem(automaticItem)
+        XCTAssertTrue(try XCTUnwrap(store.shoppingItems.first(where: { $0.id == automaticItem.id })).isChecked)
+
+        XCTAssertTrue(store.addShoppingItem(name: "厨房纸"))
+        let manualItem = try XCTUnwrap(store.shoppingItems.first(where: { $0.name == "厨房纸" }))
+        store.toggleShoppingItem(manualItem)
+
+        let reloadedItems = LocalKitchenStore(persistence: persistence, legacyDefaults: nil).shoppingItems
+        XCTAssertTrue(try XCTUnwrap(reloadedItems.first(where: { $0.id == automaticItem.id })).isChecked)
+        XCTAssertTrue(try XCTUnwrap(reloadedItems.first(where: { $0.name == "厨房纸" })).isChecked)
+
+        store.removeShoppingItem(manualItem)
+        XCTAssertFalse(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).shoppingItems.contains(where: { $0.name == "厨房纸" }))
+    }
+
+    @MainActor
+    func testMealPlanCanBeReorderedForAnyDate() {
+        let store = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
+        let date = Calendar.current.date(byAdding: .day, value: 2, to: .now)!
+        let firstRecipe = store.recipes[0]
+        let secondRecipe = store.recipes[1]
+
+        store.schedule(firstRecipe, for: date)
+        store.schedule(secondRecipe, for: date)
+        store.moveScheduledRecipe(secondRecipe, by: -1, for: date)
+
+        XCTAssertEqual(store.recipes(for: date), [secondRecipe, firstRecipe])
+    }
+
+    @MainActor
     func testEditingAndRemovingPantryItemPersists() throws {
         let persistence = KitchenSnapshotStorage.inMemory()
         let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
@@ -192,11 +227,15 @@ final class LittleKitchenTests: XCTestCase {
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encodedSnapshot) as? [String: Any])
         object.removeValue(forKey: "revisions")
         object.removeValue(forKey: "completedRecipeIDsByDate")
+        object.removeValue(forKey: "manualShoppingItems")
+        object.removeValue(forKey: "checkedAutomaticShoppingItemNames")
         let olderSnapshot = try JSONSerialization.data(withJSONObject: object)
 
         let decodedSnapshot = try JSONDecoder().decode(KitchenSnapshot.self, from: olderSnapshot)
         XCTAssertTrue(decodedSnapshot.revisions.isEmpty)
         XCTAssertTrue(decodedSnapshot.completedRecipeIDsByDate.isEmpty)
+        XCTAssertTrue(decodedSnapshot.manualShoppingItems.isEmpty)
+        XCTAssertTrue(decodedSnapshot.checkedAutomaticShoppingItemNames.isEmpty)
     }
 
     private func makeDefaults() -> UserDefaults {

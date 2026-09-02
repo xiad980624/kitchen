@@ -97,6 +97,25 @@ struct PantryItem: Identifiable, Hashable, Codable {
     }
 }
 
+struct ShoppingItem: Identifiable, Hashable, Codable {
+    let id: UUID
+    let name: String
+    var isChecked: Bool
+
+    init(id: UUID = UUID(), name: String, isChecked: Bool = false) {
+        self.id = id
+        self.name = name
+        self.isChecked = isChecked
+    }
+}
+
+struct ShoppingListEntry: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let isManual: Bool
+    let isChecked: Bool
+}
+
 struct RecipeReview: Identifiable, Hashable, Codable {
     let id: UUID
     let recipeID: UUID
