@@ -228,7 +228,7 @@ struct PantryHomeView: View {
                 }
                 .accessibilityLabel("手动添加待购项")
             }
-            Text("菜单缺少的食材会自动加入；勾选购买后仍需入库。")
+            Text("缺少或不足的食材会自动加入，并显示还需购买的数量。")
                 .font(.caption)
                 .foregroundStyle(AppTheme.muted)
             if kitchenStore.shoppingItems.isEmpty {
@@ -249,6 +249,11 @@ struct PantryHomeView: View {
                             .font(.subheadline.weight(.medium))
                             .strikethrough(item.isChecked)
                             .foregroundStyle(item.isChecked ? AppTheme.muted : AppTheme.ink)
+                        if let automaticQuantity = item.automaticQuantity {
+                            Text(item.matchStatus == .short ? "还差 \(automaticQuantity)" : "缺少 \(automaticQuantity)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.tomato)
+                        }
                         if item.isManual {
                             Text("手动")
                                 .font(.caption2.weight(.bold))
@@ -284,12 +289,24 @@ struct PantryHomeView: View {
 
     private func tonightCheckTitle(hasPlannedRecipes: Bool) -> String {
         guard hasPlannedRecipes else { return "还没有安排菜单" }
-        return kitchenStore.shoppingList.isEmpty ? "今天的菜谱都可以做" : "还差 \(kitchenStore.shoppingList.count) 样食材"
+        if kitchenStore.shoppingList.isEmpty, kitchenStore.quantityNeedsConfirmationCount == 0 {
+            return "今天的菜谱都可以做"
+        }
+        if kitchenStore.shoppingList.isEmpty {
+            return "有 \(kitchenStore.quantityNeedsConfirmationCount) 样食材待确认"
+        }
+        return "还差 \(kitchenStore.shoppingList.count) 样食材"
     }
 
     private func tonightCheckMessage(hasPlannedRecipes: Bool) -> String {
         guard hasPlannedRecipes else { return "在日历安排菜谱后，这里会自动核对冰箱库存。" }
-        return kitchenStore.shoppingList.isEmpty ? "冰箱库存已满足今天菜单。" : "缺少食材已自动汇总到下方待购清单。"
+        if kitchenStore.shoppingList.isEmpty, kitchenStore.quantityNeedsConfirmationCount == 0 {
+            return "冰箱库存和数量已满足今天菜单。"
+        }
+        if kitchenStore.shoppingList.isEmpty {
+            return "有食材的数量或单位无法判断，请补充库存数量。"
+        }
+        return "缺少食材已按实际差额汇总到下方待购清单。"
     }
 
     private func presentNewItemEditor() {

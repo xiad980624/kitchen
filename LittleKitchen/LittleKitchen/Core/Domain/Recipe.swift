@@ -124,6 +124,176 @@ struct ShoppingListEntry: Identifiable, Hashable {
     let name: String
     let isManual: Bool
     let isChecked: Bool
+    let automaticQuantity: String?
+    let matchStatus: IngredientMatchStatus?
+
+    init(
+        id: String,
+        name: String,
+        isManual: Bool,
+        isChecked: Bool,
+        automaticQuantity: String? = nil,
+        matchStatus: IngredientMatchStatus? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.isManual = isManual
+        self.isChecked = isChecked
+        self.automaticQuantity = automaticQuantity
+        self.matchStatus = matchStatus
+    }
+}
+
+enum IngredientMatchStatus: Hashable {
+    case ready
+    case short
+    case missing
+    case check
+}
+
+struct IngredientStockMatch: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let status: IngredientMatchStatus
+    let requiredQuantity: String?
+    let availableQuantity: String?
+    let shoppingQuantity: String?
+}
+
+enum IngredientStockMatcher {
+    static func matches(recipes: [Recipe], pantryItems: [PantryItem]) -> [IngredientStockMatch] {
+        let pantryByName = Dictionary(grouping: pantryItems, by: { normalizedName($0.name) })
+            .mapValues { $0[0] }
+        let groupedIngredients = Dictionary(grouping: recipes.flatMap(\.ingredients), by: { normalizedName($0.name) })
+
+        return groupedIngredients.compactMap { normalizedName, ingredients in
+            guard let name = ingredients.first?.name.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
+            let requirement = aggregatedQuantity(from: ingredients.map(\.quantity))
+            let pantryItem = pantryByName[normalizedName]
+            let available = pantryItem.flatMap { ParsedIngredientQuantity($0.quantity) }
+
+            if pantryItem == nil {
+                return IngredientStockMatch(
+                    id: normalizedName,
+                    name: name,
+                    status: .missing,
+                    requiredQuantity: requirement.display,
+                    availableQuantity: nil,
+                    shoppingQuantity: requirement.display
+                )
+            }
+
+            guard let required = requirement.parsed,
+                  let available,
+                  required.unitKey == available.unitKey else {
+                return IngredientStockMatch(
+                    id: normalizedName,
+                    name: name,
+                    status: .check,
+                    requiredQuantity: requirement.display,
+                    availableQuantity: pantryItem?.quantity,
+                    shoppingQuantity: nil
+                )
+            }
+
+            if available.value >= required.value {
+                return IngredientStockMatch(
+                    id: normalizedName,
+                    name: name,
+                    status: .ready,
+                    requiredQuantity: required.display,
+                    availableQuantity: available.display,
+                    shoppingQuantity: nil
+                )
+            }
+
+            let shortage = ParsedIngredientQuantity(value: required.value - available.value, unitKey: required.unitKey)
+            return IngredientStockMatch(
+                id: normalizedName,
+                name: name,
+                status: .short,
+                requiredQuantity: required.display,
+                availableQuantity: available.display,
+                shoppingQuantity: shortage.display
+            )
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private static func aggregatedQuantity(from quantities: [String]) -> AggregatedIngredientQuantity {
+        let parsed = quantities.compactMap(ParsedIngredientQuantity.init)
+        guard parsed.count == quantities.count,
+              let first = parsed.first,
+              parsed.allSatisfy({ $0.unitKey == first.unitKey }) else {
+            let descriptions = quantities
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            return AggregatedIngredientQuantity(parsed: nil, display: descriptions.isEmpty ? nil : descriptions.joined(separator: "、"))
+        }
+
+        let total = parsed.reduce(0) { $0 + $1.value }
+        let totalQuantity = ParsedIngredientQuantity(value: total, unitKey: first.unitKey)
+        return AggregatedIngredientQuantity(parsed: totalQuantity, display: totalQuantity.display)
+    }
+
+    private static func normalizedName(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
+private struct AggregatedIngredientQuantity {
+    let parsed: ParsedIngredientQuantity?
+    let display: String?
+}
+
+private struct ParsedIngredientQuantity {
+    let value: Double
+    let unitKey: String
+
+    nonisolated init?( _ rawValue: String) {
+        let compact = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .lowercased()
+        let numberText = String(compact.prefix { $0.isNumber || $0 == "." })
+        let unitText = String(compact.dropFirst(numberText.count))
+        guard let number = Double(numberText), number >= 0, !unitText.isEmpty,
+              let unit = Self.normalizedUnit(for: unitText) else { return nil }
+        self.init(value: number * unit.multiplier, unitKey: unit.key)
+    }
+
+    nonisolated init(value: Double, unitKey: String) {
+        self.value = value
+        self.unitKey = unitKey
+    }
+
+    nonisolated var display: String {
+        "\(Self.formatted(value)) \(Self.displayUnit(for: unitKey))"
+    }
+
+    nonisolated private static func normalizedUnit(for unit: String) -> (key: String, multiplier: Double)? {
+        switch unit {
+        case "g", "克": return ("g", 1)
+        case "kg", "公斤", "千克": return ("g", 1_000)
+        case "斤": return ("g", 500)
+        case "ml", "毫升": return ("ml", 1)
+        case "l", "升": return ("ml", 1_000)
+        case "个", "只", "根", "片", "瓣", "块", "枚", "把", "包", "袋", "份", "汤匙", "勺", "茶匙": return (unit, 1)
+        default: return nil
+        }
+    }
+
+    nonisolated private static func displayUnit(for key: String) -> String {
+        switch key {
+        case "g": return "g"
+        case "ml": return "ml"
+        default: return key
+        }
+    }
+
+    nonisolated private static func formatted(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
+    }
 }
 
 enum MealPeriod: String, CaseIterable, Identifiable, Hashable, Codable {
