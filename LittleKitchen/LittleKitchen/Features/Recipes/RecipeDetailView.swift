@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RecipeDetailView: View {
     let recipe: Recipe
@@ -201,10 +202,22 @@ struct RecipeDetailView: View {
                         .frame(width: 25, height: 25)
                         .background(AppTheme.sage)
                         .clipShape(Circle())
-                    Text(step)
-                        .font(.body)
-                        .foregroundStyle(AppTheme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(step)
+                            .font(.body)
+                            .foregroundStyle(AppTheme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if recipe.stepImageData.indices.contains(index),
+                           let imageData = recipe.stepImageData[index],
+                           let image = UIImage(data: imageData) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 190)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                    }
                 }
             }
         }

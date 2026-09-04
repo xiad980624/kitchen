@@ -49,6 +49,7 @@ struct Recipe: Identifiable, Hashable, Codable {
     let availability: RecipeAvailability
     let ingredients: [RecipeIngredient]
     let steps: [String]
+    let stepImageData: [Data?]
 
     init(
         id: UUID = UUID(),
@@ -63,7 +64,8 @@ struct Recipe: Identifiable, Hashable, Codable {
         voteCount: Int,
         availability: RecipeAvailability,
         ingredients: [RecipeIngredient],
-        steps: [String]
+        steps: [String],
+        stepImageData: [Data?] = []
     ) {
         self.id = id
         self.title = title
@@ -78,6 +80,29 @@ struct Recipe: Identifiable, Hashable, Codable {
         self.availability = availability
         self.ingredients = ingredients
         self.steps = steps
+        self.stepImageData = stepImageData
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, category, customCategoryName, emoji, imageData, duration, rating, reviewCount, voteCount, availability, ingredients, steps, stepImageData
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        category = try container.decode(RecipeCategory.self, forKey: .category)
+        customCategoryName = try container.decodeIfPresent(String.self, forKey: .customCategoryName)
+        emoji = try container.decode(String.self, forKey: .emoji)
+        imageData = try container.decodeIfPresent(Data.self, forKey: .imageData)
+        duration = try container.decode(Int.self, forKey: .duration)
+        rating = try container.decode(Double.self, forKey: .rating)
+        reviewCount = try container.decode(Int.self, forKey: .reviewCount)
+        voteCount = try container.decode(Int.self, forKey: .voteCount)
+        availability = try container.decode(RecipeAvailability.self, forKey: .availability)
+        ingredients = try container.decode([RecipeIngredient].self, forKey: .ingredients)
+        steps = try container.decode([String].self, forKey: .steps)
+        stepImageData = try container.decodeIfPresent([Data?].self, forKey: .stepImageData) ?? []
     }
 
     func ingredients(for kind: IngredientKind) -> [RecipeIngredient] {

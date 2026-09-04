@@ -10,7 +10,8 @@ struct PantryHomeView: View {
     @State private var newItemName = ""
     @State private var newItemCategory = "其他"
     @State private var newItemQuantity = ""
-    @State private var newItemExpiryHint = ""
+    @State private var isExpiryReminderEnabled = false
+    @State private var expiryReminderDate = Date.now
     @State private var newShoppingItemName = ""
     @State private var shoppingDate = Date.now
     @State private var selectedShoppingPeriod: ShoppingPeriodFilter = .all
@@ -45,12 +46,23 @@ struct PantryHomeView: View {
                 Form {
                     TextField("食材名称", text: $newItemName)
                         .accessibilityLabel("食材名称")
-                    TextField("分类，例如蔬菜", text: $newItemCategory)
-                        .accessibilityLabel("食材分类")
+                    Picker("食材分类", selection: $newItemCategory) {
+                        ForEach(PantryCategory.allCases) { category in
+                            Text(category.rawValue).tag(category.rawValue)
+                        }
+                        if !PantryCategory.allCases.map(\.rawValue).contains(newItemCategory) {
+                            Text(newItemCategory).tag(newItemCategory)
+                        }
+                    }
+                    .accessibilityLabel("食材分类")
                     TextField("数量，例如 2 根", text: $newItemQuantity)
                         .accessibilityLabel("食材数量")
-                    TextField("临期提醒（可选）", text: $newItemExpiryHint)
-                        .accessibilityLabel("临期提醒")
+                    Toggle("设置临期提醒", isOn: $isExpiryReminderEnabled)
+                        .tint(AppTheme.tomato)
+                    if isExpiryReminderEnabled {
+                        DatePicker("临期日期", selection: $expiryReminderDate, displayedComponents: .date)
+                            .accessibilityLabel("临期日期")
+                    }
                 }
                 .navigationTitle(itemBeingEdited == nil ? "添加食材" : "编辑食材")
                 .toolbar {
@@ -203,9 +215,14 @@ struct PantryHomeView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name)
                                 .font(.subheadline.weight(.bold))
-                            Text(item.expiryHint ?? item.category)
+                            Text(item.category)
                                 .font(.caption)
-                                .foregroundStyle(item.expiryHint == nil ? AppTheme.muted : AppTheme.tomato)
+                                .foregroundStyle(AppTheme.muted)
+                            if let expiryHint = item.expiryHint {
+                                Text("临期：\(displayExpiryHint(expiryHint))")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTheme.tomato)
+                            }
                         }
                         Spacer()
                         Text(item.quantity)
@@ -229,7 +246,7 @@ struct PantryHomeView: View {
                     .padding(.vertical, 10)
                     .appCard()
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(item.name)，\(item.quantity)，\(item.expiryHint ?? item.category)")
+                    .accessibilityLabel("\(item.name)，\(item.category)，\(item.quantity)\(item.expiryHint.map { "，临期\(displayExpiryHint($0))" } ?? "")")
                 }
             }
         }
@@ -375,7 +392,8 @@ struct PantryHomeView: View {
         newItemName = ""
         newItemCategory = "其他"
         newItemQuantity = ""
-        newItemExpiryHint = ""
+        isExpiryReminderEnabled = false
+        expiryReminderDate = .now
         isPresentingAddItem = true
     }
 
@@ -384,7 +402,12 @@ struct PantryHomeView: View {
         newItemName = item.name
         newItemCategory = item.category
         newItemQuantity = item.quantity
-        newItemExpiryHint = item.expiryHint ?? ""
+        isExpiryReminderEnabled = item.expiryHint != nil
+        if let expiryHint = item.expiryHint, let date = Self.expiryDate(from: expiryHint) {
+            expiryReminderDate = date
+        } else {
+            expiryReminderDate = .now
+        }
         isPresentingAddItem = true
     }
 
@@ -396,14 +419,14 @@ struct PantryHomeView: View {
                 name: newItemName,
                 category: newItemCategory,
                 quantity: newItemQuantity,
-                expiryHint: newItemExpiryHint
+                expiryHint: isExpiryReminderEnabled ? Self.expiryHint(for: expiryReminderDate) : nil
             )
         } else {
             didSave = kitchenStore.addPantryItem(
                 name: newItemName,
                 category: newItemCategory,
                 quantity: newItemQuantity,
-                expiryHint: newItemExpiryHint
+                expiryHint: isExpiryReminderEnabled ? Self.expiryHint(for: expiryReminderDate) : nil
             )
         }
 
@@ -419,6 +442,39 @@ struct PantryHomeView: View {
         isPresentingAddItem = false
         itemBeingEdited = nil
     }
+
+    private func displayExpiryHint(_ hint: String) -> String {
+        Self.expiryDate(from: hint)?.formatted(.dateTime.month().day()) ?? hint
+    }
+
+    private static func expiryHint(for date: Date) -> String {
+        expiryDateFormatter.string(from: date)
+    }
+
+    private static func expiryDate(from hint: String) -> Date? {
+        expiryDateFormatter.date(from: hint)
+    }
+
+    private static let expiryDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+}
+
+private enum PantryCategory: String, CaseIterable, Identifiable {
+    case vegetables = "蔬菜"
+    case fruits = "水果"
+    case meatAndDairy = "肉蛋奶"
+    case seafood = "水产"
+    case staple = "主食"
+    case seasoning = "调味料"
+    case drinks = "饮品"
+    case other = "其他"
+
+    var id: String { rawValue }
 }
 
 private enum ShoppingPeriodFilter: String, CaseIterable, Identifiable {
