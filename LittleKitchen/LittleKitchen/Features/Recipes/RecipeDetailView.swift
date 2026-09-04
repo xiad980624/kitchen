@@ -8,6 +8,8 @@ struct RecipeDetailView: View {
     @State private var reviewText = ""
     @State private var isPresentingSchedulePicker = false
     @State private var scheduledDate = Date.now
+    @State private var scheduledMealPeriod: MealPeriod = .dinner
+    @State private var scheduledMealTime = Date.now
 
     var body: some View {
         ScrollView {
@@ -42,6 +44,12 @@ struct RecipeDetailView: View {
                 Form {
                     DatePicker("安排日期", selection: $scheduledDate, displayedComponents: .date)
                         .datePickerStyle(.graphical)
+                    Picker("用餐时段", selection: $scheduledMealPeriod) {
+                        ForEach(MealPeriod.allCases) { period in
+                            Text(period.rawValue).tag(period)
+                        }
+                    }
+                    DatePicker("时间", selection: $scheduledMealTime, displayedComponents: .hourAndMinute)
                 }
                 .navigationTitle("安排\(recipe.title)")
                 .toolbar {
@@ -50,9 +58,17 @@ struct RecipeDetailView: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("安排") {
-                            kitchenStore.schedule(recipe, for: scheduledDate)
-                            coordinator.showToast("已安排到\(scheduledDate.formatted(.dateTime.month().day()))")
-                            isPresentingSchedulePicker = false
+                            if kitchenStore.schedule(
+                                recipe,
+                                for: scheduledDate,
+                                period: scheduledMealPeriod,
+                                timeMinutes: minutes(in: scheduledMealTime)
+                            ) {
+                                coordinator.showToast("已安排到\(scheduledDate.formatted(.dateTime.month().day())) \(scheduledMealPeriod.rawValue)")
+                                isPresentingSchedulePicker = false
+                            } else {
+                                coordinator.showToast("这道菜已安排在当天菜单")
+                            }
                         }
                     }
                 }
@@ -89,6 +105,8 @@ struct RecipeDetailView: View {
 
             Button {
                 scheduledDate = .now
+                scheduledMealPeriod = .dinner
+                scheduledMealTime = time(for: .dinner)
                 isPresentingSchedulePicker = true
             } label: {
                 Label("安排日期", systemImage: "calendar.badge.plus")
@@ -251,5 +269,19 @@ struct RecipeDetailView: View {
                 .font(.caption)
                 .foregroundStyle(AppTheme.muted)
         }
+    }
+
+    private func minutes(in date: Date) -> Int {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+    }
+
+    private func time(for period: MealPeriod) -> Date {
+        Calendar.current.date(
+            bySettingHour: period.defaultTimeMinutes / 60,
+            minute: period.defaultTimeMinutes % 60,
+            second: 0,
+            of: .now
+        ) ?? .now
     }
 }

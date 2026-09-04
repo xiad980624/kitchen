@@ -116,6 +116,48 @@ struct ShoppingListEntry: Identifiable, Hashable {
     let isChecked: Bool
 }
 
+enum MealPeriod: String, CaseIterable, Identifiable, Hashable, Codable {
+    case breakfast = "早餐"
+    case lunch = "午餐"
+    case dinner = "晚餐"
+
+    var id: String { rawValue }
+
+    var defaultTimeMinutes: Int {
+        switch self {
+        case .breakfast: 8 * 60
+        case .lunch: 12 * 60
+        case .dinner: 18 * 60
+        }
+    }
+}
+
+struct ScheduledMeal: Identifiable, Hashable, Codable {
+    let id: UUID
+    let recipeID: UUID
+    var period: MealPeriod
+    var timeMinutes: Int
+    var sortOrder: Int
+
+    init(
+        id: UUID = UUID(),
+        recipeID: UUID,
+        period: MealPeriod,
+        timeMinutes: Int? = nil,
+        sortOrder: Int = 0
+    ) {
+        self.id = id
+        self.recipeID = recipeID
+        self.period = period
+        self.timeMinutes = timeMinutes ?? period.defaultTimeMinutes
+        self.sortOrder = sortOrder
+    }
+
+    var timeLabel: String {
+        String(format: "%02d:%02d", timeMinutes / 60, timeMinutes % 60)
+    }
+}
+
 struct RecipeReview: Identifiable, Hashable, Codable {
     let id: UUID
     let recipeID: UUID
