@@ -40,6 +40,37 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
+    func testShoppingListCanFilterByDateAndMealPeriodWithRecipeSources() {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let date = Date.now
+        let lunchRecipe = quantityRecipe(title: "午餐炒蛋", ingredient: RecipeIngredient(name: "鸡蛋", quantity: "2 个", kind: .main))
+        let dinnerRecipe = quantityRecipe(title: "晚餐番茄汤", ingredient: RecipeIngredient(name: "番茄", quantity: "3 个", kind: .side))
+        persistence.save(
+            KitchenSnapshot(
+                recipes: [lunchRecipe, dinnerRecipe],
+                votedRecipeIDs: [],
+                reviews: [],
+                pantryItems: [],
+                scheduledRecipeIDsByDate: [:],
+                scheduledMealsByDate: [
+                    date.formatted(.iso8601.year().month().day()): [
+                        ScheduledMeal(recipeID: lunchRecipe.id, period: .lunch),
+                        ScheduledMeal(recipeID: dinnerRecipe.id, period: .dinner)
+                    ]
+                ]
+            )
+        )
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+
+        let lunchItems = store.shoppingItems(for: date, period: .lunch).filter { !$0.isManual }
+
+        XCTAssertEqual(lunchItems.map(\.name), ["鸡蛋"])
+        XCTAssertEqual(lunchItems.first?.automaticQuantity, "2 个")
+        XCTAssertEqual(lunchItems.first?.sourceRecipeTitles, ["午餐炒蛋"])
+        XCTAssertEqual(store.shoppingList(for: date).sorted(), ["番茄", "鸡蛋"])
+    }
+
+    @MainActor
     func testDuplicatingRecipeCreatesIndependentRecipe() throws {
         let store = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
         let original = try XCTUnwrap(store.recipes.first)

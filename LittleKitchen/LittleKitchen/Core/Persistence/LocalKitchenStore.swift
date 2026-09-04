@@ -117,8 +117,8 @@ final class LocalKitchenStore: ObservableObject {
         reviews[recipe.id]
     }
 
-    func recipes(for date: Date = .now) -> [Recipe] {
-        scheduledMeals(for: date).compactMap { meal in recipe(id: meal.recipeID) }
+    func recipes(for date: Date = .now, period: MealPeriod? = nil) -> [Recipe] {
+        scheduledMeals(for: date, period: period).compactMap { meal in recipe(id: meal.recipeID) }
     }
 
     func scheduledMeals(for date: Date = .now, period: MealPeriod? = nil) -> [ScheduledMeal] {
@@ -256,18 +256,27 @@ final class LocalKitchenStore: ObservableObject {
     }
 
     var shoppingList: [String] {
-        automaticShoppingMatches.map(\.name)
+        shoppingList(for: .now)
     }
 
     var shoppingItems: [ShoppingListEntry] {
-        let automaticItems = automaticShoppingMatches.map { match in
+        shoppingItems(for: .now)
+    }
+
+    func shoppingList(for date: Date, period: MealPeriod? = nil) -> [String] {
+        automaticShoppingMatches(for: date, period: period).map(\.name)
+    }
+
+    func shoppingItems(for date: Date, period: MealPeriod? = nil) -> [ShoppingListEntry] {
+        let automaticItems = automaticShoppingMatches(for: date, period: period).map { match in
             ShoppingListEntry(
                 id: "automatic:\(match.id)",
                 name: match.name,
                 isManual: false,
                 isChecked: checkedAutomaticShoppingItemNames.contains(normalizedShoppingName(match.name)),
                 automaticQuantity: match.shoppingQuantity,
-                matchStatus: match.status
+                matchStatus: match.status,
+                sourceRecipeTitles: match.sourceRecipeTitles
             )
         }
         let manualItems = manualShoppingItems.map { item in
@@ -305,16 +314,16 @@ final class LocalKitchenStore: ObservableObject {
         persistSnapshot()
     }
 
-    func ingredientMatches(for date: Date = .now) -> [IngredientStockMatch] {
-        IngredientStockMatcher.matches(recipes: recipes(for: date), pantryItems: pantryItems)
+    func ingredientMatches(for date: Date = .now, period: MealPeriod? = nil) -> [IngredientStockMatch] {
+        IngredientStockMatcher.matches(recipes: recipes(for: date, period: period), pantryItems: pantryItems)
     }
 
     var quantityNeedsConfirmationCount: Int {
         ingredientMatches().filter { $0.status == .check }.count
     }
 
-    private var automaticShoppingMatches: [IngredientStockMatch] {
-        ingredientMatches().filter { $0.status == .missing || $0.status == .short }
+    private func automaticShoppingMatches(for date: Date, period: MealPeriod?) -> [IngredientStockMatch] {
+        ingredientMatches(for: date, period: period).filter { $0.status == .missing || $0.status == .short }
     }
 
     func revisions(for recipe: Recipe) -> [RecipeRevision] {

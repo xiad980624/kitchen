@@ -126,6 +126,7 @@ struct ShoppingListEntry: Identifiable, Hashable {
     let isChecked: Bool
     let automaticQuantity: String?
     let matchStatus: IngredientMatchStatus?
+    let sourceRecipeTitles: [String]
 
     init(
         id: String,
@@ -133,7 +134,8 @@ struct ShoppingListEntry: Identifiable, Hashable {
         isManual: Bool,
         isChecked: Bool,
         automaticQuantity: String? = nil,
-        matchStatus: IngredientMatchStatus? = nil
+        matchStatus: IngredientMatchStatus? = nil,
+        sourceRecipeTitles: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -141,6 +143,7 @@ struct ShoppingListEntry: Identifiable, Hashable {
         self.isChecked = isChecked
         self.automaticQuantity = automaticQuantity
         self.matchStatus = matchStatus
+        self.sourceRecipeTitles = sourceRecipeTitles
     }
 }
 
@@ -158,16 +161,22 @@ struct IngredientStockMatch: Identifiable, Hashable {
     let requiredQuantity: String?
     let availableQuantity: String?
     let shoppingQuantity: String?
+    let sourceRecipeTitles: [String]
 }
 
 enum IngredientStockMatcher {
     static func matches(recipes: [Recipe], pantryItems: [PantryItem]) -> [IngredientStockMatch] {
         let pantryByName = Dictionary(grouping: pantryItems, by: { normalizedName($0.name) })
             .mapValues { $0[0] }
-        let groupedIngredients = Dictionary(grouping: recipes.flatMap(\.ingredients), by: { normalizedName($0.name) })
+        let ingredientUses = recipes.flatMap { recipe in
+            recipe.ingredients.map { IngredientRecipeUse(recipeTitle: recipe.title, ingredient: $0) }
+        }
+        let groupedIngredients = Dictionary(grouping: ingredientUses, by: { normalizedName($0.ingredient.name) })
 
-        return groupedIngredients.compactMap { normalizedName, ingredients in
-            guard let name = ingredients.first?.name.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
+        return groupedIngredients.compactMap { normalizedName, uses in
+            guard let name = uses.first?.ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
+            let ingredients = uses.map(\.ingredient)
+            let sourceRecipeTitles = Array(Set(uses.map(\.recipeTitle))).sorted()
             let requirement = aggregatedQuantity(from: ingredients.map(\.quantity))
             let pantryItem = pantryByName[normalizedName]
             let available = pantryItem.flatMap { ParsedIngredientQuantity($0.quantity) }
@@ -179,7 +188,8 @@ enum IngredientStockMatcher {
                     status: .missing,
                     requiredQuantity: requirement.display,
                     availableQuantity: nil,
-                    shoppingQuantity: requirement.display
+                    shoppingQuantity: requirement.display,
+                    sourceRecipeTitles: sourceRecipeTitles
                 )
             }
 
@@ -192,7 +202,8 @@ enum IngredientStockMatcher {
                     status: .check,
                     requiredQuantity: requirement.display,
                     availableQuantity: pantryItem?.quantity,
-                    shoppingQuantity: nil
+                    shoppingQuantity: nil,
+                    sourceRecipeTitles: sourceRecipeTitles
                 )
             }
 
@@ -203,7 +214,8 @@ enum IngredientStockMatcher {
                     status: .ready,
                     requiredQuantity: required.display,
                     availableQuantity: available.display,
-                    shoppingQuantity: nil
+                    shoppingQuantity: nil,
+                    sourceRecipeTitles: sourceRecipeTitles
                 )
             }
 
@@ -214,7 +226,8 @@ enum IngredientStockMatcher {
                 status: .short,
                 requiredQuantity: required.display,
                 availableQuantity: available.display,
-                shoppingQuantity: shortage.display
+                shoppingQuantity: shortage.display,
+                sourceRecipeTitles: sourceRecipeTitles
             )
         }
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -239,6 +252,11 @@ enum IngredientStockMatcher {
     private static func normalizedName(_ name: String) -> String {
         name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
+}
+
+private struct IngredientRecipeUse {
+    let recipeTitle: String
+    let ingredient: RecipeIngredient
 }
 
 private struct AggregatedIngredientQuantity {
