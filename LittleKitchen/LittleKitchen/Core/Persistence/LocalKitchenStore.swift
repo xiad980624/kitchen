@@ -141,15 +141,8 @@ final class LocalKitchenStore: ObservableObject {
     ) -> Bool {
         let key = Self.dateKey(for: date)
         var meals = scheduledMealsByDate[key, default: []]
-        if let existingIndex = meals.firstIndex(where: { $0.recipeID == recipe.id }) {
-            let nextSortOrder = meals.filter { $0.period == period && $0.id != meals[existingIndex].id }.map(\.sortOrder).max().map { $0 + 1 } ?? 0
-            meals[existingIndex].period = period
-            meals[existingIndex].timeMinutes = timeMinutes ?? period.defaultTimeMinutes
-            meals[existingIndex].sortOrder = nextSortOrder
-        } else {
-            let nextSortOrder = meals.filter { $0.period == period }.map(\.sortOrder).max().map { $0 + 1 } ?? 0
-            meals.append(ScheduledMeal(recipeID: recipe.id, period: period, timeMinutes: timeMinutes, sortOrder: nextSortOrder))
-        }
+        let nextSortOrder = meals.filter { $0.period == period }.map(\.sortOrder).max().map { $0 + 1 } ?? 0
+        meals.append(ScheduledMeal(recipeID: recipe.id, period: period, timeMinutes: timeMinutes, sortOrder: nextSortOrder))
         scheduledMealsByDate[key] = meals
         completedRecipeIDsByDate[key] = []
         persistSnapshot()
@@ -160,6 +153,13 @@ final class LocalKitchenStore: ObservableObject {
         let key = Self.dateKey(for: date)
         scheduledMealsByDate[key]?.removeAll { $0.recipeID == recipe.id }
         completedRecipeIDsByDate[key]?.removeAll { $0 == recipe.id }
+        persistSnapshot()
+    }
+
+    func removeScheduledMeal(_ meal: ScheduledMeal, for date: Date = .now) {
+        let key = Self.dateKey(for: date)
+        scheduledMealsByDate[key]?.removeAll { $0.id == meal.id }
+        completedRecipeIDsByDate[key]?.removeAll { $0 == meal.recipeID }
         persistSnapshot()
     }
 

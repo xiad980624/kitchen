@@ -252,7 +252,7 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
-    func testSchedulingExistingRecipeUpdatesItsMealTime() throws {
+    func testSchedulingSameRecipeKeepsMultipleMealEntries() throws {
         let store = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
         let date = Calendar.current.date(byAdding: .day, value: 4, to: .now)!
         let recipe = store.recipes[0]
@@ -260,10 +260,10 @@ final class LittleKitchenTests: XCTestCase {
         XCTAssertTrue(store.schedule(recipe, for: date, period: .breakfast, timeMinutes: 480))
         XCTAssertTrue(store.schedule(recipe, for: date, period: .dinner, timeMinutes: 1_140))
 
-        let meal = try XCTUnwrap(store.scheduledMeals(for: date).first)
-        XCTAssertEqual(store.scheduledMeals(for: date).count, 1)
-        XCTAssertEqual(meal.period, .dinner)
-        XCTAssertEqual(meal.timeLabel, "19:00")
+        let meals = store.scheduledMeals(for: date)
+        XCTAssertEqual(meals.count, 2)
+        XCTAssertEqual(meals.map(\.period), [.breakfast, .dinner])
+        XCTAssertEqual(meals.map(\.timeLabel), ["08:00", "19:00"])
     }
 
     @MainActor
