@@ -14,7 +14,7 @@ struct RecipeEditorView: View {
     @State private var mainIngredients: [IngredientDraft]
     @State private var sideIngredients: [IngredientDraft]
     @State private var seasoningIngredients: [IngredientDraft]
-    @State private var firstStep = ""
+    @State private var stepDrafts: [RecipeStepDraft]
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var imageData: Data?
 
@@ -27,7 +27,7 @@ struct RecipeEditorView: View {
         _mainIngredients = State(initialValue: Self.drafts(for: recipe, kind: .main))
         _sideIngredients = State(initialValue: Self.drafts(for: recipe, kind: .side))
         _seasoningIngredients = State(initialValue: Self.drafts(for: recipe, kind: .seasoning))
-        _firstStep = State(initialValue: recipe?.steps.joined(separator: "\n") ?? "")
+        _stepDrafts = State(initialValue: recipe?.steps.map(RecipeStepDraft.init) ?? [])
         _imageData = State(initialValue: recipe?.imageData)
     }
 
@@ -81,11 +81,7 @@ struct RecipeEditorView: View {
             IngredientEditorSection(title: "辅材", ingredients: $sideIngredients)
             IngredientEditorSection(title: "调味料", ingredients: $seasoningIngredients)
 
-            Section("操作步骤") {
-                TextEditor(text: $firstStep)
-                    .frame(minHeight: 110)
-                    .accessibilityLabel("操作步骤")
-            }
+            RecipeStepEditorSection(steps: $stepDrafts)
         }
         .scrollContentBackground(.hidden)
         .background(AppTheme.cream)
@@ -141,7 +137,9 @@ struct RecipeEditorView: View {
             voteCount: recipe?.voteCount ?? 0,
             availability: recipe?.availability ?? .check,
             ingredients: ingredients,
-            steps: firstStep.split(separator: "\n").map(String.init)
+            steps: stepDrafts
+                .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
         )
         kitchenStore.save(recipe: savedRecipe)
         coordinator.editingRecipe = nil
@@ -195,6 +193,20 @@ private struct IngredientDraft: Identifiable, Hashable {
     }
 }
 
+private struct RecipeStepDraft: Identifiable, Hashable {
+    let id: UUID
+    var text: String
+
+    nonisolated init(id: UUID = UUID(), text: String = "") {
+        self.id = id
+        self.text = text
+    }
+
+    nonisolated init(_ text: String) {
+        self.init(text: text)
+    }
+}
+
 private struct IngredientEditorSection: View {
     let title: String
     @Binding var ingredients: [IngredientDraft]
@@ -225,6 +237,72 @@ private struct IngredientEditorSection: View {
                 Label("添加一项", systemImage: "plus.circle.fill")
             }
         }
+    }
+}
+
+private struct RecipeStepEditorSection: View {
+    @Binding var steps: [RecipeStepDraft]
+
+    var body: some View {
+        Section("操作步骤") {
+            if steps.isEmpty {
+                Text("还没有添加步骤")
+                    .foregroundStyle(AppTheme.muted)
+            }
+
+            ForEach(steps.indices, id: \.self) { index in
+                HStack(alignment: .top, spacing: 10) {
+                    Text("\(index + 1)")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 24, height: 24)
+                        .background(AppTheme.sage)
+                        .clipShape(Circle())
+
+                    TextField("描述这一步", text: $steps[index].text, axis: .vertical)
+                        .lineLimit(2...5)
+                        .accessibilityLabel("第\(index + 1)步")
+
+                    VStack(spacing: 8) {
+                        Button {
+                            moveStep(at: index, by: -1)
+                        } label: {
+                            Image(systemName: "chevron.up")
+                        }
+                        .disabled(index == 0)
+                        .accessibilityLabel("上移第\(index + 1)步")
+
+                        Button {
+                            moveStep(at: index, by: 1)
+                        } label: {
+                            Image(systemName: "chevron.down")
+                        }
+                        .disabled(index == steps.count - 1)
+                        .accessibilityLabel("下移第\(index + 1)步")
+
+                        Button(role: .destructive) {
+                            steps.remove(at: index)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .accessibilityLabel("删除第\(index + 1)步")
+                    }
+                    .font(.caption.weight(.bold))
+                }
+            }
+
+            Button {
+                steps.append(RecipeStepDraft())
+            } label: {
+                Label("添加一步", systemImage: "plus.circle.fill")
+            }
+        }
+    }
+
+    private func moveStep(at index: Int, by offset: Int) {
+        let destination = index + offset
+        guard steps.indices.contains(destination) else { return }
+        steps.swapAt(index, destination)
     }
 }
 
