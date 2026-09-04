@@ -25,7 +25,7 @@ struct MenuHomeView: View {
             .padding(.bottom, 28)
         }
         .background(AppTheme.cream.ignoresSafeArea())
-        .navigationTitle("今天吃什么？")
+        .navigationTitle("菜谱")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -235,21 +235,21 @@ private struct TodayMenuCard: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @EnvironmentObject private var kitchenStore: LocalKitchenStore
 
-    private var plannedRecipes: [Recipe] {
-        kitchenStore.recipes(for: .now)
+    private var plannedMeals: [ScheduledMeal] {
+        kitchenStore.scheduledMeals(for: .now)
     }
 
     private var menuSummary: String {
-        guard !plannedRecipes.isEmpty else { return "从菜谱列表安排一道菜，开始准备今晚的菜单。" }
+        guard !plannedMeals.isEmpty else { return "从日历的早餐、午餐或晚餐安排一道菜。" }
         if kitchenStore.shoppingList.isEmpty {
-            return "已安排 \(plannedRecipes.count) 道菜，冰箱库存都够用。"
+            return "已安排 \(plannedMeals.count) 道菜，冰箱库存都够用。"
         }
-        return "已安排 \(plannedRecipes.count) 道菜，还需要买 \(kitchenStore.shoppingList.count) 样食材。"
+        return "已安排 \(plannedMeals.count) 道菜，还需要买 \(kitchenStore.shoppingList.count) 样食材。"
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label(plannedRecipes.isEmpty ? "等待安排" : "今日菜单", systemImage: plannedRecipes.isEmpty ? "calendar.badge.plus" : "checkmark.circle.fill")
+            Label(plannedMeals.isEmpty ? "等待安排" : "今日菜单", systemImage: plannedMeals.isEmpty ? "calendar.badge.plus" : "checkmark.circle.fill")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppTheme.ink)
                 .padding(.horizontal, 10)
@@ -257,17 +257,29 @@ private struct TodayMenuCard: View {
                 .background(.white.opacity(0.72))
                 .clipShape(Capsule())
 
-            Text(plannedRecipes.isEmpty ? "今晚吃什么？" : "今晚的家庭菜单")
+            Text(plannedMeals.isEmpty ? "今天吃什么？" : "今天的家庭菜单")
                 .font(.title3.weight(.bold))
             Text(menuSummary)
                 .font(.subheadline)
                 .foregroundStyle(AppTheme.ink.opacity(0.72))
 
-            ForEach(plannedRecipes) { recipe in
-                MenuDishLine(emoji: recipe.emoji, title: recipe.title, availability: recipe.availability)
+            ForEach(MealPeriod.allCases) { period in
+                let meals = kitchenStore.scheduledMeals(for: .now, period: period)
+                if !meals.isEmpty {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(period.rawValue)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(AppTheme.muted)
+                        ForEach(meals) { meal in
+                            if let recipe = kitchenStore.recipe(id: meal.recipeID) {
+                                MenuDishLine(emoji: recipe.emoji, title: recipe.title, availability: recipe.availability, timeLabel: meal.timeLabel)
+                            }
+                        }
+                    }
+                }
             }
 
-            Button(plannedRecipes.isEmpty ? "去安排菜谱" : "查看今天菜单") {
+            Button(plannedMeals.isEmpty ? "去安排菜谱" : "查看今天菜单") {
                 coordinator.selectedTab = .calendar
             }
             .buttonStyle(PrimaryButtonStyle())
@@ -282,7 +294,7 @@ private struct TodayMenuCard: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("今晚菜单，\(menuSummary)")
+        .accessibilityLabel("今日菜单，\(menuSummary)")
     }
 }
 
@@ -290,6 +302,7 @@ private struct MenuDishLine: View {
     let emoji: String
     let title: String
     let availability: RecipeAvailability
+    var timeLabel: String? = nil
 
     var body: some View {
         HStack(spacing: 9) {
@@ -301,6 +314,11 @@ private struct MenuDishLine: View {
             Text(title)
                 .font(.subheadline.weight(.bold))
             Spacer()
+            if let timeLabel {
+                Text(timeLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.sage)
+            }
             AvailabilityPill(availability: availability)
         }
     }

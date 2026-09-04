@@ -15,7 +15,7 @@ struct RootTabView: View {
                         RecipeDetailView(recipe: recipe)
                     }
             }
-            .tabItem { Label("菜单", systemImage: "fork.knife") }
+            .tabItem { Label("菜谱", systemImage: "fork.knife") }
             .tag(AppTab.menu)
 
             CalendarHomeView()
