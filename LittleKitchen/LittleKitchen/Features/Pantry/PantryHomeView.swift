@@ -83,21 +83,41 @@ struct PantryHomeView: View {
         } message: {
             Text("移除后，待购清单会按最新库存重新计算。")
         }
-        .alert("补充待购项", isPresented: $isPresentingAddShoppingItem) {
-            TextField("例如 厨房纸", text: $newShoppingItemName)
-            Button("取消", role: .cancel) {
-                newShoppingItemName = ""
-            }
-            Button("添加") {
-                guard kitchenStore.addShoppingItem(name: newShoppingItemName) else {
-                    coordinator.showToast("待购项不能为空，且不能重复")
-                    return
+        .sheet(isPresented: $isPresentingAddShoppingItem) {
+            NavigationStack {
+                Form {
+                    Section {
+                        TextField("例如：厨房纸", text: $newShoppingItemName)
+                            .accessibilityLabel("待购项目名称")
+                    } footer: {
+                        Text("手动加入的项目会保存在本机，不受菜单和日期筛选影响。")
+                    }
                 }
-                newShoppingItemName = ""
-                coordinator.showToast("已加入待购清单")
+                .navigationTitle("补充待购项")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") {
+                            newShoppingItemName = ""
+                            isPresentingAddShoppingItem = false
+                        }
+                        .foregroundStyle(AppTheme.muted)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("添加") {
+                            guard kitchenStore.addShoppingItem(name: newShoppingItemName) else {
+                                coordinator.showToast("待购项不能为空，且不能重复")
+                                return
+                            }
+                            newShoppingItemName = ""
+                            isPresentingAddShoppingItem = false
+                            coordinator.showToast("已加入待购清单")
+                        }
+                        .fontWeight(.bold)
+                        .foregroundStyle(AppTheme.sage)
+                        .disabled(newShoppingItemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
             }
-        } message: {
-            Text("手动加入的项目会保存在本机，不受菜单变动影响。")
         }
     }
 
@@ -243,6 +263,20 @@ struct PantryHomeView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                Spacer(minLength: 0)
+                Button {
+                    shoppingDate = .now
+                } label: {
+                    Text("今")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(isShoppingDateToday ? AppTheme.muted : .white)
+                        .frame(width: 30, height: 30)
+                        .background(isShoppingDateToday ? AppTheme.paper : AppTheme.sage)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isShoppingDateToday)
+                .accessibilityLabel("回到今天")
             }
             let items = kitchenStore.shoppingItems(for: shoppingDate, period: selectedShoppingPeriod.period)
             if items.isEmpty {
@@ -308,6 +342,10 @@ struct PantryHomeView: View {
 
     private var expiryItemCount: Int {
         kitchenStore.pantryItems.filter { $0.expiryHint != nil }.count
+    }
+
+    private var isShoppingDateToday: Bool {
+        Calendar.current.isDateInToday(shoppingDate)
     }
 
     private func tonightCheckTitle(hasPlannedRecipes: Bool) -> String {
