@@ -12,6 +12,8 @@ struct PantryHomeView: View {
     @State private var newItemQuantity = ""
     @State private var newItemExpiryHint = ""
     @State private var newShoppingItemName = ""
+    @State private var shoppingDate = Date.now
+    @State private var selectedShoppingPeriod: ShoppingPeriodFilter = .all
 
     var body: some View {
         NavigationStack {
@@ -231,13 +233,25 @@ struct PantryHomeView: View {
             Text("缺少或不足的食材会自动加入，并显示还需购买的数量。")
                 .font(.caption)
                 .foregroundStyle(AppTheme.muted)
-            if kitchenStore.shoppingItems.isEmpty {
+            HStack(spacing: 10) {
+                DatePicker("菜单日期", selection: $shoppingDate, displayedComponents: .date)
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+                Picker("餐次", selection: $selectedShoppingPeriod) {
+                    ForEach(ShoppingPeriodFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+            let items = kitchenStore.shoppingItems(for: shoppingDate, period: selectedShoppingPeriod.period)
+            if items.isEmpty {
                 Label("暂无待购项", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.sage)
             } else {
-                ForEach(kitchenStore.shoppingItems) { item in
-                    HStack {
+                ForEach(items) { item in
+                    HStack(alignment: .top) {
                         Button {
                             kitchenStore.toggleShoppingItem(item)
                         } label: {
@@ -245,23 +259,32 @@ struct PantryHomeView: View {
                                 .foregroundStyle(item.isChecked ? AppTheme.sage : AppTheme.carrot)
                         }
                         .accessibilityLabel("\(item.isChecked ? "取消勾选" : "勾选")\(item.name)")
-                        Text(item.name)
-                            .font(.subheadline.weight(.medium))
-                            .strikethrough(item.isChecked)
-                            .foregroundStyle(item.isChecked ? AppTheme.muted : AppTheme.ink)
-                        if let automaticQuantity = item.automaticQuantity {
-                            Text(item.matchStatus == .short ? "还差 \(automaticQuantity)" : "缺少 \(automaticQuantity)")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(AppTheme.tomato)
-                        }
-                        if item.isManual {
-                            Text("手动")
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(AppTheme.sage)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(AppTheme.sageSoft)
-                                .clipShape(Capsule())
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(item.name)
+                                    .font(.subheadline.weight(.medium))
+                                    .strikethrough(item.isChecked)
+                                    .foregroundStyle(item.isChecked ? AppTheme.muted : AppTheme.ink)
+                                if let automaticQuantity = item.automaticQuantity {
+                                    Text(item.matchStatus == .short ? "还差 \(automaticQuantity)" : "缺少 \(automaticQuantity)")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(AppTheme.tomato)
+                                }
+                                if item.isManual {
+                                    Text("手动")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(AppTheme.sage)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 3)
+                                        .background(AppTheme.sageSoft)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                            if !item.sourceRecipeTitles.isEmpty {
+                                Text("来自：\(item.sourceRecipeTitles.joined(separator: "、"))")
+                                    .font(.caption)
+                                    .foregroundStyle(AppTheme.muted)
+                            }
                         }
                         Spacer()
                         if item.isManual {
@@ -357,5 +380,32 @@ struct PantryHomeView: View {
     private func dismissItemEditor() {
         isPresentingAddItem = false
         itemBeingEdited = nil
+    }
+}
+
+private enum ShoppingPeriodFilter: String, CaseIterable, Identifiable {
+    case all
+    case breakfast
+    case lunch
+    case dinner
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "全天"
+        case .breakfast: return "早餐"
+        case .lunch: return "午餐"
+        case .dinner: return "晚餐"
+        }
+    }
+
+    var period: MealPeriod? {
+        switch self {
+        case .all: return nil
+        case .breakfast: return .breakfast
+        case .lunch: return .lunch
+        case .dinner: return .dinner
+        }
     }
 }
