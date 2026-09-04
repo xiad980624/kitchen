@@ -17,10 +17,47 @@ final class LittleKitchenTests: XCTestCase {
         XCTAssertEqual(recipe.ingredients(for: .seasoning).map(\.name), ["干辣椒", "生抽"])
     }
 
+    func testIngredientMatcherCalculatesShortageAcrossWeightUnits() {
+        let firstRecipe = quantityRecipe(title: "番茄牛腩", ingredient: RecipeIngredient(name: "牛腩", quantity: "1 kg", kind: .main))
+        let secondRecipe = quantityRecipe(title: "萝卜牛腩", ingredient: RecipeIngredient(name: "牛腩", quantity: "300 g", kind: .main))
+        let pantryItem = PantryItem(name: "牛腩", emoji: "🥩", category: "肉类", quantity: "700 g")
+
+        let match = IngredientStockMatcher.matches(recipes: [firstRecipe, secondRecipe], pantryItems: [pantryItem]).first
+
+        XCTAssertEqual(match?.status, .short)
+        XCTAssertEqual(match?.requiredQuantity, "1300 g")
+        XCTAssertEqual(match?.shoppingQuantity, "600 g")
+    }
+
+    func testIngredientMatcherMarksUnclearQuantitiesForConfirmation() {
+        let recipe = quantityRecipe(title: "凉拌豆腐", ingredient: RecipeIngredient(name: "香菜", quantity: "适量", kind: .side))
+        let pantryItem = PantryItem(name: "香菜", emoji: "🥬", category: "蔬菜", quantity: "待填写")
+
+        let match = IngredientStockMatcher.matches(recipes: [recipe], pantryItems: [pantryItem]).first
+
+        XCTAssertEqual(match?.status, .check)
+        XCTAssertNil(match?.shoppingQuantity)
+    }
+
     func testSampleRecipesHaveUniqueIDs() {
         let ids = Set(SampleData.recipes.map(\.id))
 
         XCTAssertEqual(ids.count, SampleData.recipes.count)
+    }
+
+    private func quantityRecipe(title: String, ingredient: RecipeIngredient) -> Recipe {
+        Recipe(
+            title: title,
+            category: .homestyle,
+            emoji: "🍲",
+            duration: 20,
+            rating: 0,
+            reviewCount: 0,
+            voteCount: 0,
+            availability: .check,
+            ingredients: [ingredient],
+            steps: []
+        )
     }
 
     @MainActor

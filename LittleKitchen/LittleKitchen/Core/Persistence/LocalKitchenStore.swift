@@ -220,16 +220,18 @@ final class LocalKitchenStore: ObservableObject {
     }
 
     var shoppingList: [String] {
-        missingIngredientNames
+        automaticShoppingMatches.map(\.name)
     }
 
     var shoppingItems: [ShoppingListEntry] {
-        let automaticItems = missingIngredientNames.map { name in
+        let automaticItems = automaticShoppingMatches.map { match in
             ShoppingListEntry(
-                id: "automatic:\(normalizedShoppingName(name))",
-                name: name,
+                id: "automatic:\(match.id)",
+                name: match.name,
                 isManual: false,
-                isChecked: checkedAutomaticShoppingItemNames.contains(normalizedShoppingName(name))
+                isChecked: checkedAutomaticShoppingItemNames.contains(normalizedShoppingName(match.name)),
+                automaticQuantity: match.shoppingQuantity,
+                matchStatus: match.status
             )
         }
         let manualItems = manualShoppingItems.map { item in
@@ -267,9 +269,16 @@ final class LocalKitchenStore: ObservableObject {
         persistSnapshot()
     }
 
-    private var missingIngredientNames: [String] {
-        let stocked = Set(pantryItems.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) })
-        return Array(Set(recipes(for: .now).flatMap(\.ingredients).map(\.name).filter { !stocked.contains($0) })).sorted()
+    func ingredientMatches(for date: Date = .now) -> [IngredientStockMatch] {
+        IngredientStockMatcher.matches(recipes: recipes(for: date), pantryItems: pantryItems)
+    }
+
+    var quantityNeedsConfirmationCount: Int {
+        ingredientMatches().filter { $0.status == .check }.count
+    }
+
+    private var automaticShoppingMatches: [IngredientStockMatch] {
+        ingredientMatches().filter { $0.status == .missing || $0.status == .short }
     }
 
     func revisions(for recipe: Recipe) -> [RecipeRevision] {
