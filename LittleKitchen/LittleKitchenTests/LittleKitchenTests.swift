@@ -324,6 +324,32 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
+    func testRecipeStepImagesPersistWithRecipe() throws {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let imageData = Data([7, 8, 9])
+        let recipe = Recipe(
+            title: "图文菜谱",
+            category: .quick,
+            emoji: "🥘",
+            duration: 15,
+            rating: 0,
+            reviewCount: 0,
+            voteCount: 0,
+            availability: .check,
+            ingredients: [],
+            steps: ["先准备食材", "下锅翻炒"],
+            stepImageData: [imageData, nil]
+        )
+
+        store.save(recipe: recipe)
+
+        let reloadedRecipe = try XCTUnwrap(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).recipe(id: recipe.id))
+        XCTAssertEqual(reloadedRecipe.steps, ["先准备食材", "下锅翻炒"])
+        XCTAssertEqual(reloadedRecipe.stepImageData, [imageData, nil])
+    }
+
+    @MainActor
     func testExistingMealPlanMigratesToDinnerAtDefaultTime() {
         let persistence = KitchenSnapshotStorage.inMemory()
         let recipe = SampleData.recipes[0]

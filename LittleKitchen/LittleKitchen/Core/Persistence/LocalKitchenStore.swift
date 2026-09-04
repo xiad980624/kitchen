@@ -88,7 +88,8 @@ final class LocalKitchenStore: ObservableObject {
             ingredients: recipe.ingredients.map {
                 RecipeIngredient(name: $0.name, quantity: $0.quantity, kind: $0.kind)
             },
-            steps: recipe.steps
+            steps: recipe.steps,
+            stepImageData: recipe.stepImageData
         )
         save(recipe: copy)
         return copy

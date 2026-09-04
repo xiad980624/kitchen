@@ -27,7 +27,7 @@ struct RecipeEditorView: View {
         _mainIngredients = State(initialValue: Self.drafts(for: recipe, kind: .main))
         _sideIngredients = State(initialValue: Self.drafts(for: recipe, kind: .side))
         _seasoningIngredients = State(initialValue: Self.drafts(for: recipe, kind: .seasoning))
-        _stepDrafts = State(initialValue: recipe?.steps.map(RecipeStepDraft.init) ?? [])
+        _stepDrafts = State(initialValue: Self.stepDrafts(for: recipe))
         _imageData = State(initialValue: recipe?.imageData)
     }
 
@@ -137,9 +137,8 @@ struct RecipeEditorView: View {
             voteCount: recipe?.voteCount ?? 0,
             availability: recipe?.availability ?? .check,
             ingredients: ingredients,
-            steps: stepDrafts
-                .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
+            steps: savedSteps.map { $0.text },
+            stepImageData: savedSteps.map { $0.imageData }
         )
         kitchenStore.save(recipe: savedRecipe)
         coordinator.editingRecipe = nil
@@ -162,6 +161,21 @@ struct RecipeEditorView: View {
 
     private static func drafts(for recipe: Recipe?, kind: IngredientKind) -> [IngredientDraft] {
         recipe?.ingredients(for: kind).map(IngredientDraft.init) ?? []
+    }
+
+    private static func stepDrafts(for recipe: Recipe?) -> [RecipeStepDraft] {
+        guard let recipe else { return [] }
+        return recipe.steps.enumerated().map { index, step in
+            RecipeStepDraft(text: step, imageData: recipe.stepImageData.indices.contains(index) ? recipe.stepImageData[index] : nil)
+        }
+    }
+
+    private var savedSteps: [(text: String, imageData: Data?)] {
+        stepDrafts.compactMap { draft in
+            let text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            return (text, draft.imageData)
+        }
     }
 
     private func compressedImageData(from data: Data) -> Data {
@@ -196,14 +210,16 @@ private struct IngredientDraft: Identifiable, Hashable {
 private struct RecipeStepDraft: Identifiable, Hashable {
     let id: UUID
     var text: String
+    var imageData: Data?
 
-    nonisolated init(id: UUID = UUID(), text: String = "") {
+    nonisolated init(id: UUID = UUID(), text: String = "", imageData: Data? = nil) {
         self.id = id
         self.text = text
+        self.imageData = imageData
     }
 
-    nonisolated init(_ text: String) {
-        self.init(text: text)
+    nonisolated init(_ text: String, imageData: Data? = nil) {
+        self.init(text: text, imageData: imageData)
     }
 }
 
@@ -251,44 +267,15 @@ private struct RecipeStepEditorSection: View {
             }
 
             ForEach(steps.indices, id: \.self) { index in
-                HStack(alignment: .top, spacing: 10) {
-                    Text("\(index + 1)")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 24, height: 24)
-                        .background(AppTheme.sage)
-                        .clipShape(Circle())
-
-                    TextField("描述这一步", text: $steps[index].text, axis: .vertical)
-                        .lineLimit(2...5)
-                        .accessibilityLabel("第\(index + 1)步")
-
-                    VStack(spacing: 8) {
-                        Button {
-                            moveStep(at: index, by: -1)
-                        } label: {
-                            Image(systemName: "chevron.up")
-                        }
-                        .disabled(index == 0)
-                        .accessibilityLabel("上移第\(index + 1)步")
-
-                        Button {
-                            moveStep(at: index, by: 1)
-                        } label: {
-                            Image(systemName: "chevron.down")
-                        }
-                        .disabled(index == steps.count - 1)
-                        .accessibilityLabel("下移第\(index + 1)步")
-
-                        Button(role: .destructive) {
-                            steps.remove(at: index)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                        }
-                        .accessibilityLabel("删除第\(index + 1)步")
-                    }
-                    .font(.caption.weight(.bold))
-                }
+                RecipeStepEditorRow(
+                    step: $steps[index],
+                    number: index + 1,
+                    canMoveUp: index > 0,
+                    canMoveDown: index < steps.count - 1,
+                    moveUp: { moveStep(at: index, by: -1) },
+                    moveDown: { moveStep(at: index, by: 1) },
+                    remove: { steps.remove(at: index) }
+                )
             }
 
             Button {
@@ -303,6 +290,86 @@ private struct RecipeStepEditorSection: View {
         let destination = index + offset
         guard steps.indices.contains(destination) else { return }
         steps.swapAt(index, destination)
+    }
+}
+
+private struct RecipeStepEditorRow: View {
+    @Binding var step: RecipeStepDraft
+    let number: Int
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let moveUp: () -> Void
+    let moveDown: () -> Void
+    let remove: () -> Void
+    @State private var selectedPhotoItem: PhotosPickerItem?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("\(number)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(AppTheme.sage)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("描述这一步", text: $step.text, axis: .vertical)
+                    .lineLimit(2...5)
+                    .accessibilityLabel("第\(number)步")
+                HStack(spacing: 10) {
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                        if let imageData = step.imageData, let image = UIImage(data: imageData) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 54, height: 54)
+                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        } else {
+                            Label("添加图片", systemImage: "photo.badge.plus")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppTheme.sage)
+                        }
+                    }
+                    if step.imageData != nil {
+                        Button("移除图片", role: .destructive) {
+                            step.imageData = nil
+                            selectedPhotoItem = nil
+                        }
+                        .font(.caption)
+                    }
+                }
+            }
+
+            VStack(spacing: 8) {
+                Button(action: moveUp) { Image(systemName: "chevron.up") }
+                    .disabled(!canMoveUp)
+                    .accessibilityLabel("上移第\(number)步")
+                Button(action: moveDown) { Image(systemName: "chevron.down") }
+                    .disabled(!canMoveDown)
+                    .accessibilityLabel("下移第\(number)步")
+                Button(role: .destructive, action: remove) { Image(systemName: "minus.circle") }
+                    .accessibilityLabel("删除第\(number)步")
+            }
+            .font(.caption.weight(.bold))
+        }
+        .onChange(of: selectedPhotoItem) { _, item in
+            Task {
+                guard let data = try? await item?.loadTransferable(type: Data.self) else { return }
+                step.imageData = compressedImageData(from: data)
+            }
+        }
+    }
+
+    private func compressedImageData(from data: Data) -> Data {
+        guard let image = UIImage(data: data) else { return data }
+        let maximumDimension: CGFloat = 1_200
+        let scale = min(1, maximumDimension / max(image.size.width, image.size.height))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let resizedImage = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resizedImage.jpegData(compressionQuality: 0.76) ?? data
     }
 }
 
