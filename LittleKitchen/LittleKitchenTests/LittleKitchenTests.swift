@@ -39,6 +39,39 @@ final class LittleKitchenTests: XCTestCase {
         XCTAssertNil(match?.shoppingQuantity)
     }
 
+    @MainActor
+    func testDuplicatingRecipeCreatesIndependentRecipe() throws {
+        let store = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
+        let original = try XCTUnwrap(store.recipes.first)
+
+        let copy = store.duplicate(original)
+
+        XCTAssertNotEqual(copy.id, original.id)
+        XCTAssertEqual(copy.title, "\(original.title) 副本")
+        XCTAssertEqual(copy.ingredients.map(\.name), original.ingredients.map(\.name))
+        XCTAssertTrue(Set(copy.ingredients.map(\.id)).intersection(original.ingredients.map(\.id)).isEmpty)
+        XCTAssertNotNil(store.recipe(id: copy.id))
+    }
+
+    @MainActor
+    func testDeletingRecipeRemovesItsLocalAssociations() {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let recipe = store.recipes[0]
+
+        store.toggleVote(for: recipe)
+        store.saveReview(recipeID: recipe.id, rating: 5, comment: "常做")
+        store.schedule(recipe)
+        store.delete(recipe)
+
+        let reloadedStore = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        XCTAssertNil(reloadedStore.recipe(id: recipe.id))
+        XCTAssertFalse(reloadedStore.isVoted(recipe))
+        XCTAssertNil(reloadedStore.review(for: recipe))
+        XCTAssertFalse(reloadedStore.recipes(for: .now).contains(recipe))
+        XCTAssertTrue(reloadedStore.revisions(for: recipe).isEmpty)
+    }
+
     func testSampleRecipesHaveUniqueIDs() {
         let ids = Set(SampleData.recipes.map(\.id))
 

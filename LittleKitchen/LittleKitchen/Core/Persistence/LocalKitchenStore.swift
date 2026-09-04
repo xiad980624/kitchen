@@ -72,6 +72,42 @@ final class LocalKitchenStore: ObservableObject {
         persistSnapshot()
     }
 
+    @discardableResult
+    func duplicate(_ recipe: Recipe) -> Recipe {
+        let copy = Recipe(
+            title: "\(recipe.title) 副本",
+            category: recipe.category,
+            customCategoryName: recipe.customCategoryName,
+            emoji: recipe.emoji,
+            imageData: recipe.imageData,
+            duration: recipe.duration,
+            rating: 0,
+            reviewCount: 0,
+            voteCount: 0,
+            availability: .check,
+            ingredients: recipe.ingredients.map {
+                RecipeIngredient(name: $0.name, quantity: $0.quantity, kind: $0.kind)
+            },
+            steps: recipe.steps
+        )
+        save(recipe: copy)
+        return copy
+    }
+
+    func delete(_ recipe: Recipe) {
+        recipes.removeAll { $0.id == recipe.id }
+        votedRecipeIDs.remove(recipe.id)
+        reviews.removeValue(forKey: recipe.id)
+        scheduledMealsByDate = scheduledMealsByDate.mapValues { meals in
+            meals.filter { $0.recipeID != recipe.id }
+        }
+        completedRecipeIDsByDate = completedRecipeIDsByDate.mapValues { recipeIDs in
+            recipeIDs.filter { $0 != recipe.id }
+        }
+        revisions.removeAll { $0.recipeID == recipe.id }
+        persistSnapshot()
+    }
+
     func saveReview(recipeID: UUID, rating: Int, comment: String) {
         reviews[recipeID] = RecipeReview(recipeID: recipeID, rating: rating, comment: comment)
         persistSnapshot()

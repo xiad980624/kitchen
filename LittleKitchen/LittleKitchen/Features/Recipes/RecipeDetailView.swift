@@ -4,12 +4,14 @@ struct RecipeDetailView: View {
     let recipe: Recipe
     @EnvironmentObject private var coordinator: AppCoordinator
     @EnvironmentObject private var kitchenStore: LocalKitchenStore
+    @Environment(\.dismiss) private var dismiss
     @State private var selectedRating = 5
     @State private var reviewText = ""
     @State private var isPresentingSchedulePicker = false
     @State private var scheduledDate = Date.now
     @State private var scheduledMealPeriod: MealPeriod = .dinner
     @State private var scheduledMealTime = Date.now
+    @State private var isConfirmingRecipeDeletion = false
 
     var body: some View {
         ScrollView {
@@ -28,10 +30,30 @@ struct RecipeDetailView: View {
         .background(AppTheme.cream.ignoresSafeArea())
         .navigationTitle(recipe.title)
         .toolbar {
-            Button("编辑") {
-                coordinator.editingRecipe = recipe
-                coordinator.isPresentingRecipeEditor = true
+            Menu {
+                Button("编辑", systemImage: "pencil") {
+                    coordinator.editingRecipe = recipe
+                    coordinator.isPresentingRecipeEditor = true
+                }
+                Button("复制菜谱", systemImage: "doc.on.doc") {
+                    let copy = kitchenStore.duplicate(recipe)
+                    coordinator.showToast("已复制为“\(copy.title)”")
+                }
+                Button("删除菜谱", systemImage: "trash", role: .destructive) {
+                    isConfirmingRecipeDeletion = true
+                }
+            } label: {
+                Label("管理菜谱", systemImage: "ellipsis.circle")
             }
+        }
+        .confirmationDialog("删除“\(recipe.title)”？", isPresented: $isConfirmingRecipeDeletion, titleVisibility: .visible) {
+            Button("删除菜谱", role: .destructive) {
+                kitchenStore.delete(recipe)
+                dismiss()
+                coordinator.showToast("已删除“\(recipe.title)”")
+            }
+        } message: {
+            Text("这会移除这道菜的日历安排、点评和修改记录，无法恢复。")
         }
         .onAppear {
             if let review = kitchenStore.review(for: recipe) {
