@@ -134,6 +134,45 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
+    func testScheduledMealsPersistWithMealPeriodAndTime() throws {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let date = Calendar.current.date(byAdding: .day, value: 3, to: .now)!
+        let breakfastRecipe = store.recipes[0]
+        let dinnerRecipe = store.recipes[1]
+
+        XCTAssertTrue(store.schedule(breakfastRecipe, for: date, period: .breakfast, timeMinutes: 450))
+        XCTAssertTrue(store.schedule(dinnerRecipe, for: date, period: .dinner, timeMinutes: 1_140))
+
+        let meals = LocalKitchenStore(persistence: persistence, legacyDefaults: nil).scheduledMeals(for: date)
+        XCTAssertEqual(meals.map(\.recipeID), [breakfastRecipe.id, dinnerRecipe.id])
+        XCTAssertEqual(meals.map(\.period), [.breakfast, .dinner])
+        XCTAssertEqual(meals.map(\.timeLabel), ["07:30", "19:00"])
+    }
+
+    @MainActor
+    func testExistingMealPlanMigratesToDinnerAtDefaultTime() {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let recipe = SampleData.recipes[0]
+        let date = Date.now
+        persistence.save(
+            KitchenSnapshot(
+                recipes: [recipe],
+                votedRecipeIDs: [],
+                reviews: [],
+                pantryItems: [],
+                scheduledRecipeIDsByDate: [date.formatted(.iso8601.year().month().day()): [recipe.id]]
+            )
+        )
+
+        let meal = LocalKitchenStore(persistence: persistence, legacyDefaults: nil).scheduledMeals(for: date).first
+
+        XCTAssertEqual(meal?.recipeID, recipe.id)
+        XCTAssertEqual(meal?.period, .dinner)
+        XCTAssertEqual(meal?.timeLabel, "18:00")
+    }
+
+    @MainActor
     func testEditingAndRemovingPantryItemPersists() throws {
         let persistence = KitchenSnapshotStorage.inMemory()
         let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
@@ -226,6 +265,7 @@ final class LittleKitchenTests: XCTestCase {
         let encodedSnapshot = try JSONEncoder().encode(snapshot)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encodedSnapshot) as? [String: Any])
         object.removeValue(forKey: "revisions")
+        object.removeValue(forKey: "scheduledMealsByDate")
         object.removeValue(forKey: "completedRecipeIDsByDate")
         object.removeValue(forKey: "manualShoppingItems")
         object.removeValue(forKey: "checkedAutomaticShoppingItemNames")
@@ -234,6 +274,7 @@ final class LittleKitchenTests: XCTestCase {
         let decodedSnapshot = try JSONDecoder().decode(KitchenSnapshot.self, from: olderSnapshot)
         XCTAssertTrue(decodedSnapshot.revisions.isEmpty)
         XCTAssertTrue(decodedSnapshot.completedRecipeIDsByDate.isEmpty)
+        XCTAssertTrue(decodedSnapshot.scheduledMealsByDate.isEmpty)
         XCTAssertTrue(decodedSnapshot.manualShoppingItems.isEmpty)
         XCTAssertTrue(decodedSnapshot.checkedAutomaticShoppingItemNames.isEmpty)
     }

@@ -7,7 +7,7 @@ final class LocalKitchenStore: ObservableObject {
     @Published private(set) var votedRecipeIDs: Set<UUID>
     @Published private(set) var reviews: [UUID: RecipeReview]
     @Published private(set) var pantryItems: [PantryItem]
-    @Published private(set) var scheduledRecipeIDsByDate: [String: [UUID]]
+    @Published private(set) var scheduledMealsByDate: [String: [ScheduledMeal]]
     @Published private(set) var completedRecipeIDsByDate: [String: [UUID]]
     @Published private(set) var manualShoppingItems: [ShoppingItem]
     @Published private(set) var checkedAutomaticShoppingItemNames: Set<String>
@@ -24,18 +24,21 @@ final class LocalKitchenStore: ObservableObject {
 
         let persistedSnapshot = persistence.load()
         let snapshot = persistedSnapshot ?? LegacyKitchenSnapshotLoader.load(from: legacyDefaults) ?? Self.sampleSnapshot
+        let needsMealMigration = snapshot.scheduledMealsByDate.isEmpty && !snapshot.scheduledRecipeIDsByDate.isEmpty
         recipes = snapshot.recipes
         votedRecipeIDs = Set(snapshot.votedRecipeIDs)
         reviews = Dictionary(uniqueKeysWithValues: snapshot.reviews.map { ($0.recipeID, $0) })
         pantryItems = snapshot.pantryItems
-        scheduledRecipeIDsByDate = snapshot.scheduledRecipeIDsByDate
+        scheduledMealsByDate = snapshot.scheduledMealsByDate.isEmpty
+            ? Self.migrateScheduledMeals(from: snapshot.scheduledRecipeIDsByDate)
+            : snapshot.scheduledMealsByDate
         completedRecipeIDsByDate = snapshot.completedRecipeIDsByDate
         manualShoppingItems = snapshot.manualShoppingItems
         checkedAutomaticShoppingItemNames = Set(snapshot.checkedAutomaticShoppingItemNames)
         revisions = snapshot.revisions
 
-        if persistedSnapshot == nil {
-            persistence.save(snapshot)
+        if persistedSnapshot == nil || needsMealMigration {
+            persistSnapshot()
         }
     }
 
@@ -79,40 +82,66 @@ final class LocalKitchenStore: ObservableObject {
     }
 
     func recipes(for date: Date = .now) -> [Recipe] {
-        let ids = scheduledRecipeIDsByDate[Self.dateKey(for: date)] ?? []
-        return ids.compactMap { id in recipes.first { $0.id == id } }
+        scheduledMeals(for: date).compactMap { meal in recipe(id: meal.recipeID) }
     }
 
-    func schedule(_ recipe: Recipe, for date: Date = .now) {
+    func scheduledMeals(for date: Date = .now, period: MealPeriod? = nil) -> [ScheduledMeal] {
+        let meals = scheduledMealsByDate[Self.dateKey(for: date)] ?? []
+        return meals
+            .filter { period == nil || $0.period == period }
+            .sorted {
+                if $0.period != $1.period { return MealPeriod.allCases.firstIndex(of: $0.period)! < MealPeriod.allCases.firstIndex(of: $1.period)! }
+                if $0.timeMinutes != $1.timeMinutes { return $0.timeMinutes < $1.timeMinutes }
+                return $0.sortOrder < $1.sortOrder
+            }
+    }
+
+    @discardableResult
+    func schedule(
+        _ recipe: Recipe,
+        for date: Date = .now,
+        period: MealPeriod = .dinner,
+        timeMinutes: Int? = nil
+    ) -> Bool {
         let key = Self.dateKey(for: date)
-        var ids = scheduledRecipeIDsByDate[key, default: []]
-        guard !ids.contains(recipe.id) else { return }
-        ids.append(recipe.id)
-        scheduledRecipeIDsByDate[key] = ids
+        var meals = scheduledMealsByDate[key, default: []]
+        guard !meals.contains(where: { $0.recipeID == recipe.id }) else { return false }
+        let nextSortOrder = meals.filter { $0.period == period }.map(\.sortOrder).max().map { $0 + 1 } ?? 0
+        meals.append(ScheduledMeal(recipeID: recipe.id, period: period, timeMinutes: timeMinutes, sortOrder: nextSortOrder))
+        scheduledMealsByDate[key] = meals
         completedRecipeIDsByDate[key] = []
         persistSnapshot()
+        return true
     }
 
     func removeFromSchedule(_ recipe: Recipe, for date: Date = .now) {
         let key = Self.dateKey(for: date)
-        scheduledRecipeIDsByDate[key]?.removeAll { $0 == recipe.id }
+        scheduledMealsByDate[key]?.removeAll { $0.recipeID == recipe.id }
         completedRecipeIDsByDate[key]?.removeAll { $0 == recipe.id }
         persistSnapshot()
     }
 
     func moveScheduledRecipe(_ recipe: Recipe, by offset: Int, for date: Date = .now) {
         let key = Self.dateKey(for: date)
-        guard var ids = scheduledRecipeIDsByDate[key],
-              let currentIndex = ids.firstIndex(of: recipe.id) else { return }
+        guard var meals = scheduledMealsByDate[key],
+              let currentMeal = meals.first(where: { $0.recipeID == recipe.id }) else { return }
+        let periodMeals = meals.filter { $0.period == currentMeal.period }.sorted {
+            $0.timeMinutes == $1.timeMinutes ? $0.sortOrder < $1.sortOrder : $0.timeMinutes < $1.timeMinutes
+        }
+        guard let currentIndex = periodMeals.firstIndex(of: currentMeal) else { return }
         let destinationIndex = currentIndex + offset
-        guard ids.indices.contains(destinationIndex) else { return }
-        ids.swapAt(currentIndex, destinationIndex)
-        scheduledRecipeIDsByDate[key] = ids
+        guard periodMeals.indices.contains(destinationIndex),
+              let firstIndex = meals.firstIndex(of: currentMeal),
+              let secondIndex = meals.firstIndex(of: periodMeals[destinationIndex]) else { return }
+        let firstOrder = meals[firstIndex].sortOrder
+        meals[firstIndex].sortOrder = meals[secondIndex].sortOrder
+        meals[secondIndex].sortOrder = firstOrder
+        scheduledMealsByDate[key] = meals
         persistSnapshot()
     }
 
     func isMenuCompleted(for date: Date = .now) -> Bool {
-        let scheduledIDs = scheduledRecipeIDsByDate[Self.dateKey(for: date)] ?? []
+        let scheduledIDs = scheduledMeals(for: date).map(\.recipeID)
         guard !scheduledIDs.isEmpty else { return false }
         let completedIDs = Set(completedRecipeIDsByDate[Self.dateKey(for: date)] ?? [])
         return Set(scheduledIDs).isSubset(of: completedIDs)
@@ -120,7 +149,7 @@ final class LocalKitchenStore: ObservableObject {
 
     func completeMenu(for date: Date = .now) {
         let key = Self.dateKey(for: date)
-        let scheduledIDs = scheduledRecipeIDsByDate[key] ?? []
+        let scheduledIDs = scheduledMeals(for: date).map(\.recipeID)
         guard !scheduledIDs.isEmpty else { return }
         completedRecipeIDsByDate[key] = scheduledIDs
         persistSnapshot()
@@ -250,7 +279,12 @@ final class LocalKitchenStore: ObservableObject {
                 votedRecipeIDs: votedRecipeIDs.sorted { $0.uuidString < $1.uuidString },
                 reviews: reviews.values.sorted { $0.recipeID.uuidString < $1.recipeID.uuidString },
                 pantryItems: pantryItems,
-                scheduledRecipeIDsByDate: scheduledRecipeIDsByDate,
+                scheduledRecipeIDsByDate: scheduledMealsByDate.mapValues { meals in
+                    meals.sorted {
+                        $0.timeMinutes == $1.timeMinutes ? $0.sortOrder < $1.sortOrder : $0.timeMinutes < $1.timeMinutes
+                    }.map(\.recipeID)
+                },
+                scheduledMealsByDate: scheduledMealsByDate,
                 completedRecipeIDsByDate: completedRecipeIDsByDate,
                 manualShoppingItems: manualShoppingItems,
                 checkedAutomaticShoppingItemNames: checkedAutomaticShoppingItemNames.sorted(),
@@ -314,5 +348,13 @@ final class LocalKitchenStore: ObservableObject {
 
     private static func dateKey(for date: Date) -> String {
         date.formatted(.iso8601.year().month().day())
+    }
+
+    private static func migrateScheduledMeals(from recipeIDsByDate: [String: [UUID]]) -> [String: [ScheduledMeal]] {
+        recipeIDsByDate.mapValues { recipeIDs in
+            recipeIDs.enumerated().map { index, recipeID in
+                ScheduledMeal(recipeID: recipeID, period: .dinner, sortOrder: index)
+            }
+        }
     }
 }

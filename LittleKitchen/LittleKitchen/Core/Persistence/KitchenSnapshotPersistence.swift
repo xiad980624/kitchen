@@ -7,6 +7,7 @@ struct KitchenSnapshot: Codable {
     let reviews: [RecipeReview]
     let pantryItems: [PantryItem]
     let scheduledRecipeIDsByDate: [String: [UUID]]
+    let scheduledMealsByDate: [String: [ScheduledMeal]]
     let completedRecipeIDsByDate: [String: [UUID]]
     let manualShoppingItems: [ShoppingItem]
     let checkedAutomaticShoppingItemNames: [String]
@@ -18,6 +19,7 @@ struct KitchenSnapshot: Codable {
         reviews: [RecipeReview],
         pantryItems: [PantryItem],
         scheduledRecipeIDsByDate: [String: [UUID]],
+        scheduledMealsByDate: [String: [ScheduledMeal]] = [:],
         completedRecipeIDsByDate: [String: [UUID]] = [:],
         manualShoppingItems: [ShoppingItem] = [],
         checkedAutomaticShoppingItemNames: [String] = [],
@@ -28,6 +30,7 @@ struct KitchenSnapshot: Codable {
         self.reviews = reviews
         self.pantryItems = pantryItems
         self.scheduledRecipeIDsByDate = scheduledRecipeIDsByDate
+        self.scheduledMealsByDate = scheduledMealsByDate
         self.completedRecipeIDsByDate = completedRecipeIDsByDate
         self.manualShoppingItems = manualShoppingItems
         self.checkedAutomaticShoppingItemNames = checkedAutomaticShoppingItemNames
@@ -40,6 +43,7 @@ struct KitchenSnapshot: Codable {
         case reviews
         case pantryItems
         case scheduledRecipeIDsByDate
+        case scheduledMealsByDate
         case completedRecipeIDsByDate
         case manualShoppingItems
         case checkedAutomaticShoppingItemNames
@@ -53,6 +57,7 @@ struct KitchenSnapshot: Codable {
         reviews = try container.decode([RecipeReview].self, forKey: .reviews)
         pantryItems = try container.decode([PantryItem].self, forKey: .pantryItems)
         scheduledRecipeIDsByDate = try container.decode([String: [UUID]].self, forKey: .scheduledRecipeIDsByDate)
+        scheduledMealsByDate = try container.decodeIfPresent([String: [ScheduledMeal]].self, forKey: .scheduledMealsByDate) ?? [:]
         completedRecipeIDsByDate = try container.decodeIfPresent([String: [UUID]].self, forKey: .completedRecipeIDsByDate) ?? [:]
         manualShoppingItems = try container.decodeIfPresent([ShoppingItem].self, forKey: .manualShoppingItems) ?? []
         checkedAutomaticShoppingItemNames = try container.decodeIfPresent([String].self, forKey: .checkedAutomaticShoppingItemNames) ?? []

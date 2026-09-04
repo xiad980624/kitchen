@@ -5,6 +5,10 @@ struct CalendarHomeView: View {
     @EnvironmentObject private var kitchenStore: LocalKitchenStore
     @State private var displayedMonth = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: .now)) ?? .now
     @State private var selectedDate = Date.now
+    @State private var isPresentingMealScheduler = false
+    @State private var selectedRecipeID: UUID?
+    @State private var selectedMealPeriod: MealPeriod = .dinner
+    @State private var selectedMealTime = Date.now
 
     private let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
 
@@ -20,6 +24,10 @@ struct CalendarHomeView: View {
 
     private var selectedRecipes: [Recipe] {
         kitchenStore.recipes(for: selectedDate)
+    }
+
+    private var availableRecipes: [Recipe] {
+        kitchenStore.recipes.filter { candidate in !selectedRecipes.contains(candidate) }
     }
 
     private var isSelectedMenuCompleted: Bool {
@@ -38,16 +46,9 @@ struct CalendarHomeView: View {
             }
             .background(AppTheme.cream.ignoresSafeArea())
             .navigationTitle("菜单日历")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        scheduleNextRecipe()
-                    } label: {
-                        Label("安排", systemImage: "plus")
-                    }
-                    .accessibilityLabel("安排一道菜到\(selectedDate.formatted(.dateTime.month().day()))")
-                }
-            }
+        }
+        .sheet(isPresented: $isPresentingMealScheduler) {
+            mealScheduler
         }
     }
 
@@ -57,18 +58,10 @@ struct CalendarHomeView: View {
                 Text(displayedMonth.formatted(.dateTime.year().month(.wide)))
                     .font(.headline)
                 Spacer()
-                Button {
-                    changeMonth(by: -1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                }
-                .accessibilityLabel("上个月")
-                Button {
-                    changeMonth(by: 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                }
-                .accessibilityLabel("下个月")
+                Button { changeMonth(by: -1) } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel("上个月")
+                Button { changeMonth(by: 1) } label: { Image(systemName: "chevron.right") }
+                    .accessibilityLabel("下个月")
             }
             .foregroundStyle(AppTheme.ink)
 
@@ -79,20 +72,15 @@ struct CalendarHomeView: View {
                         .foregroundStyle(AppTheme.muted)
                 }
                 ForEach(0..<firstWeekdayOffset, id: \.self) { _ in
-                    Color.clear
-                        .frame(height: 44)
-                        .accessibilityHidden(true)
+                    Color.clear.frame(height: 44).accessibilityHidden(true)
                 }
                 ForEach(days, id: \.self) { day in
                     let cellDate = date(for: day)
-                    let recipes = kitchenStore.recipes(for: cellDate)
+                    let meals = kitchenStore.scheduledMeals(for: cellDate)
                     let isSelected = Calendar.current.isDate(cellDate, inSameDayAs: selectedDate)
                     let isToday = Calendar.current.isDateInToday(cellDate)
                     let isCompleted = kitchenStore.isMenuCompleted(for: cellDate)
-
-                    Button {
-                        selectedDate = cellDate
-                    } label: {
+                    Button { selectedDate = cellDate } label: {
                         VStack(spacing: 3) {
                             Text("\(day)")
                                 .font(.caption.weight(isToday || isSelected ? .bold : .regular))
@@ -100,7 +88,7 @@ struct CalendarHomeView: View {
                                 .background(isSelected ? AppTheme.carrot : (isToday ? AppTheme.sage : .clear))
                                 .foregroundStyle((isSelected || isToday) ? .white : AppTheme.ink)
                                 .clipShape(Circle())
-                            if !recipes.isEmpty {
+                            if !meals.isEmpty {
                                 Image(systemName: isCompleted ? "checkmark.circle.fill" : "fork.knife.circle.fill")
                                     .font(.caption2)
                                     .foregroundStyle(isCompleted ? AppTheme.sage : AppTheme.carrot)
@@ -111,7 +99,7 @@ struct CalendarHomeView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(cellDate.formatted(.dateTime.month().day().weekday(.wide)))\(recipes.isEmpty ? "，没有安排" : "，已安排\(recipes.count)道菜")")
+                    .accessibilityLabel("\(cellDate.formatted(.dateTime.month().day().weekday(.wide)))\(meals.isEmpty ? "，没有安排" : "，已安排\(meals.count)道菜")")
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
@@ -122,7 +110,7 @@ struct CalendarHomeView: View {
 
     private var dayMenu: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(selectedDate.formatted(.dateTime.month().day().weekday(.wide)))
                         .font(.title3.weight(.bold))
@@ -131,7 +119,28 @@ struct CalendarHomeView: View {
                         .foregroundStyle(selectedRecipes.isEmpty ? AppTheme.muted : (isSelectedMenuCompleted ? AppTheme.sage : AppTheme.carrot))
                 }
                 Spacer()
-                Button(isSelectedMenuCompleted ? "撤销完成" : "完成") {
+                Button {
+                    presentMealScheduler()
+                } label: {
+                    Label("安排菜谱", systemImage: "plus")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(availableRecipes.isEmpty)
+            }
+
+            if selectedRecipes.isEmpty {
+                EmptyStateCard(
+                    symbol: "calendar.badge.plus",
+                    title: "还没有安排菜谱",
+                    message: "选择菜谱、时段和时间，提前安排这一天。",
+                    actionTitle: "安排菜谱",
+                    action: { presentMealScheduler() }
+                )
+            } else {
+                ForEach(MealPeriod.allCases) { period in
+                    mealSection(period)
+                }
+                Button(isSelectedMenuCompleted ? "撤销完成" : "完成当天菜单") {
                     if isSelectedMenuCompleted {
                         kitchenStore.reopenMenu(for: selectedDate)
                         coordinator.showToast("已恢复当天菜单")
@@ -141,58 +150,6 @@ struct CalendarHomeView: View {
                     }
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(selectedRecipes.isEmpty)
-            }
-            if selectedRecipes.isEmpty {
-                EmptyStateCard(
-                    symbol: "calendar.badge.plus",
-                    title: "还没有安排菜谱",
-                    message: "把一道现有菜谱安排到这一天，便能提前做好准备。",
-                    actionTitle: "安排一道菜",
-                    action: scheduleNextRecipe
-                )
-            } else {
-                ForEach(Array(selectedRecipes.enumerated()), id: \.element.id) { index, recipe in
-                    HStack(spacing: 10) {
-                        Text(recipe.emoji)
-                            .font(.title2)
-                        Text(recipe.title)
-                            .font(.subheadline.weight(.bold))
-                        if isSelectedMenuCompleted {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(AppTheme.sage)
-                                .accessibilityLabel("已完成")
-                        }
-                        Spacer()
-                        VStack(spacing: 3) {
-                            Button {
-                                kitchenStore.moveScheduledRecipe(recipe, by: -1, for: selectedDate)
-                            } label: {
-                                Image(systemName: "chevron.up")
-                            }
-                            .disabled(index == 0)
-                            .accessibilityLabel("将\(recipe.title)提前")
-                            Button {
-                                kitchenStore.moveScheduledRecipe(recipe, by: 1, for: selectedDate)
-                            } label: {
-                                Image(systemName: "chevron.down")
-                            }
-                            .disabled(index == selectedRecipes.count - 1)
-                            .accessibilityLabel("将\(recipe.title)延后")
-                        }
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(AppTheme.muted)
-                        Button {
-                            kitchenStore.removeFromSchedule(recipe, for: selectedDate)
-                            coordinator.showToast("已从当天菜单移除")
-                        } label: {
-                            Image(systemName: "minus.circle")
-                                .foregroundStyle(AppTheme.tomato)
-                        }
-                        .accessibilityLabel("移除\(recipe.title)")
-                    }
-                    .padding(.vertical, 7)
-                }
             }
         }
         .padding(17)
@@ -200,15 +157,113 @@ struct CalendarHomeView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private func scheduleNextRecipe() {
-        guard let recipe = kitchenStore.recipes.first(where: { candidate in
-            !selectedRecipes.contains(candidate)
-        }) else {
-            coordinator.showToast("这一天的菜谱已全部安排")
+    private func mealSection(_ period: MealPeriod) -> some View {
+        let meals = kitchenStore.scheduledMeals(for: selectedDate, period: period)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(period.rawValue)
+                    .font(.subheadline.weight(.bold))
+                Spacer()
+                Button {
+                    presentMealScheduler(defaultingTo: period)
+                } label: {
+                    Label("安排", systemImage: "plus.circle")
+                        .font(.caption.weight(.semibold))
+                }
+                .disabled(availableRecipes.isEmpty)
+                .accessibilityLabel("安排\(period.rawValue)")
+            }
+            if meals.isEmpty {
+                Text("暂未安排")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.muted)
+            } else {
+                ForEach(meals) { meal in
+                    if let recipe = kitchenStore.recipe(id: meal.recipeID) {
+                        HStack(spacing: 10) {
+                            Text(meal.timeLabel)
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(AppTheme.sage)
+                                .frame(width: 40, alignment: .leading)
+                            Text(recipe.emoji).font(.title3)
+                            Text(recipe.title).font(.subheadline.weight(.bold))
+                            if isSelectedMenuCompleted {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(AppTheme.sage)
+                                    .accessibilityLabel("已完成")
+                            }
+                            Spacer()
+                            Button {
+                                kitchenStore.removeFromSchedule(recipe, for: selectedDate)
+                                coordinator.showToast("已从当天菜单移除")
+                            } label: {
+                                Image(systemName: "minus.circle")
+                                    .foregroundStyle(AppTheme.tomato)
+                            }
+                            .accessibilityLabel("移除\(recipe.title)")
+                        }
+                        .padding(.vertical, 5)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(.white.opacity(0.58))
+        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+    }
+
+    private var mealScheduler: some View {
+        NavigationStack {
+            Group {
+                if availableRecipes.isEmpty {
+                    ContentUnavailableView("没有可安排的菜谱", systemImage: "fork.knife", description: Text("这一天的现有菜谱都已安排。"))
+                } else {
+                    Form {
+                        Picker("选择菜谱", selection: $selectedRecipeID) {
+                            ForEach(availableRecipes) { recipe in
+                                Text("\(recipe.emoji) \(recipe.title)").tag(Optional(recipe.id))
+                            }
+                        }
+                        Picker("用餐时段", selection: $selectedMealPeriod) {
+                            ForEach(MealPeriod.allCases) { period in
+                                Text(period.rawValue).tag(period)
+                            }
+                        }
+                        DatePicker("时间", selection: $selectedMealTime, displayedComponents: .hourAndMinute)
+                    }
+                }
+            }
+            .navigationTitle("安排\(selectedDate.formatted(.dateTime.month().day()))")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { isPresentingMealScheduler = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("安排") { saveScheduledMeal() }
+                        .disabled(selectedRecipeID == nil)
+                }
+            }
+            .onChange(of: selectedMealPeriod) { _, period in
+                selectedMealTime = time(for: period.defaultTimeMinutes)
+            }
+        }
+    }
+
+    private func presentMealScheduler(defaultingTo period: MealPeriod = .dinner) {
+        selectedRecipeID = availableRecipes.first?.id
+        selectedMealPeriod = period
+        selectedMealTime = time(for: period.defaultTimeMinutes)
+        isPresentingMealScheduler = true
+    }
+
+    private func saveScheduledMeal() {
+        guard let selectedRecipeID, let recipe = kitchenStore.recipe(id: selectedRecipeID) else { return }
+        guard kitchenStore.schedule(recipe, for: selectedDate, period: selectedMealPeriod, timeMinutes: minutes(in: selectedMealTime)) else {
+            coordinator.showToast("这道菜已安排在当天菜单")
             return
         }
-        kitchenStore.schedule(recipe, for: selectedDate)
-        coordinator.showToast("已将\(recipe.title)安排到\(selectedDate.formatted(.dateTime.month().day()))")
+        coordinator.showToast("已安排\(recipe.title)到\(selectedMealPeriod.rawValue) \(ScheduledMeal(recipeID: recipe.id, period: selectedMealPeriod, timeMinutes: minutes(in: selectedMealTime)).timeLabel)")
+        isPresentingMealScheduler = false
     }
 
     private func changeMonth(by offset: Int) {
@@ -221,5 +276,14 @@ struct CalendarHomeView: View {
 
     private func date(for day: Int) -> Date {
         Calendar.current.date(byAdding: .day, value: day - 1, to: displayedMonth) ?? displayedMonth
+    }
+
+    private func minutes(in date: Date) -> Int {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+    }
+
+    private func time(for minutes: Int) -> Date {
+        Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: .now) ?? .now
     }
 }
