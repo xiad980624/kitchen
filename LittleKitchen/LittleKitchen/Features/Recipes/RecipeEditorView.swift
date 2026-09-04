@@ -11,9 +11,9 @@ struct RecipeEditorView: View {
     @State private var categoryChoice: RecipeCategoryChoice
     @State private var customCategoryName = ""
     @State private var duration = 30
-    @State private var mainIngredient = ""
-    @State private var sideIngredient = ""
-    @State private var seasoning = ""
+    @State private var mainIngredients: [IngredientDraft]
+    @State private var sideIngredients: [IngredientDraft]
+    @State private var seasoningIngredients: [IngredientDraft]
     @State private var firstStep = ""
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var imageData: Data?
@@ -24,9 +24,9 @@ struct RecipeEditorView: View {
         _categoryChoice = State(initialValue: recipe?.customCategoryName.map(RecipeCategoryChoice.custom) ?? .builtIn(recipe?.category ?? .homestyle))
         _customCategoryName = State(initialValue: recipe?.customCategoryName ?? "")
         _duration = State(initialValue: recipe?.duration ?? 30)
-        _mainIngredient = State(initialValue: recipe?.ingredients(for: .main).map(\.name).joined(separator: "、") ?? "")
-        _sideIngredient = State(initialValue: recipe?.ingredients(for: .side).map(\.name).joined(separator: "、") ?? "")
-        _seasoning = State(initialValue: recipe?.ingredients(for: .seasoning).map(\.name).joined(separator: "、") ?? "")
+        _mainIngredients = State(initialValue: Self.drafts(for: recipe, kind: .main))
+        _sideIngredients = State(initialValue: Self.drafts(for: recipe, kind: .side))
+        _seasoningIngredients = State(initialValue: Self.drafts(for: recipe, kind: .seasoning))
         _firstStep = State(initialValue: recipe?.steps.joined(separator: "\n") ?? "")
         _imageData = State(initialValue: recipe?.imageData)
     }
@@ -77,17 +77,9 @@ struct RecipeEditorView: View {
                 }
             }
 
-            Section("主菜") {
-                TextField("例如：鸡腿肉 300g", text: $mainIngredient)
-            }
-
-            Section("辅材") {
-                TextField("例如：黄瓜 半根", text: $sideIngredient)
-            }
-
-            Section("调味料") {
-                TextField("例如：生抽 1 汤匙", text: $seasoning)
-            }
+            IngredientEditorSection(title: "主菜", ingredients: $mainIngredients)
+            IngredientEditorSection(title: "辅材", ingredients: $sideIngredients)
+            IngredientEditorSection(title: "调味料", ingredients: $seasoningIngredients)
 
             Section("操作步骤") {
                 TextEditor(text: $firstStep)
@@ -121,9 +113,9 @@ struct RecipeEditorView: View {
     }
 
     private var ingredients: [RecipeIngredient] {
-        makeIngredients(mainIngredient, kind: .main)
-            + makeIngredients(sideIngredient, kind: .side)
-            + makeIngredients(seasoning, kind: .seasoning)
+        recipeIngredients(from: mainIngredients, kind: .main)
+            + recipeIngredients(from: sideIngredients, kind: .side)
+            + recipeIngredients(from: seasoningIngredients, kind: .seasoning)
     }
 
     private func saveRecipe() {
@@ -157,10 +149,21 @@ struct RecipeEditorView: View {
         coordinator.showToast("已保存“\(savedRecipe.title)”")
     }
 
-    private func makeIngredients(_ text: String, kind: IngredientKind) -> [RecipeIngredient] {
-        text.split(whereSeparator: { $0 == "、" || $0 == "," || $0 == "，" })
-            .map { RecipeIngredient(name: String($0).trimmingCharacters(in: .whitespaces), quantity: "", kind: kind) }
-            .filter { !$0.name.isEmpty }
+    private func recipeIngredients(from drafts: [IngredientDraft], kind: IngredientKind) -> [RecipeIngredient] {
+        drafts.compactMap { draft in
+            let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            return RecipeIngredient(
+                id: draft.id,
+                name: name,
+                quantity: draft.quantity.trimmingCharacters(in: .whitespacesAndNewlines),
+                kind: kind
+            )
+        }
+    }
+
+    private static func drafts(for recipe: Recipe?, kind: IngredientKind) -> [IngredientDraft] {
+        recipe?.ingredients(for: kind).map(IngredientDraft.init) ?? []
     }
 
     private func compressedImageData(from data: Data) -> Data {
@@ -173,6 +176,55 @@ struct RecipeEditorView: View {
             image.draw(in: CGRect(origin: .zero, size: size))
         }
         return resizedImage.jpegData(compressionQuality: 0.78) ?? data
+    }
+}
+
+private struct IngredientDraft: Identifiable, Hashable {
+    let id: UUID
+    var name: String
+    var quantity: String
+
+    nonisolated init(id: UUID = UUID(), name: String = "", quantity: String = "") {
+        self.id = id
+        self.name = name
+        self.quantity = quantity
+    }
+
+    nonisolated init(_ ingredient: RecipeIngredient) {
+        self.init(id: ingredient.id, name: ingredient.name, quantity: ingredient.quantity)
+    }
+}
+
+private struct IngredientEditorSection: View {
+    let title: String
+    @Binding var ingredients: [IngredientDraft]
+
+    var body: some View {
+        Section(title) {
+            if ingredients.isEmpty {
+                Text("还没有添加\(title)")
+                    .foregroundStyle(AppTheme.muted)
+            }
+
+            ForEach($ingredients) { $ingredient in
+                HStack(spacing: 10) {
+                    TextField("食材名称", text: $ingredient.name)
+                        .accessibilityLabel("\(title)名称")
+                    TextField("数量", text: $ingredient.quantity)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityLabel("\(title)数量")
+                }
+            }
+            .onDelete { offsets in
+                ingredients.remove(atOffsets: offsets)
+            }
+
+            Button {
+                ingredients.append(IngredientDraft())
+            } label: {
+                Label("添加一项", systemImage: "plus.circle.fill")
+            }
+        }
     }
 }
 
