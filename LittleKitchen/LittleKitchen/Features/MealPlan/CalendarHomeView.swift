@@ -27,7 +27,7 @@ struct CalendarHomeView: View {
     }
 
     private var availableRecipes: [Recipe] {
-        kitchenStore.recipes.filter { candidate in !selectedRecipes.contains(candidate) }
+        kitchenStore.recipes
     }
 
     private var isSelectedMenuCompleted: Bool {
@@ -216,7 +216,7 @@ struct CalendarHomeView: View {
         NavigationStack {
             Group {
                 if availableRecipes.isEmpty {
-                    ContentUnavailableView("没有可安排的菜谱", systemImage: "fork.knife", description: Text("这一天的现有菜谱都已安排。"))
+                    ContentUnavailableView("还没有菜谱", systemImage: "fork.knife", description: Text("先在菜单中新建一道菜谱。"))
                 } else {
                     Form {
                         Picker("选择菜谱", selection: $selectedRecipeID) {
@@ -230,6 +230,9 @@ struct CalendarHomeView: View {
                             }
                         }
                         DatePicker("时间", selection: $selectedMealTime, displayedComponents: .hourAndMinute)
+                        Text("已安排的菜重新选择后，会更新它的时段和时间。")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.muted)
                     }
                 }
             }
@@ -258,11 +261,9 @@ struct CalendarHomeView: View {
 
     private func saveScheduledMeal() {
         guard let selectedRecipeID, let recipe = kitchenStore.recipe(id: selectedRecipeID) else { return }
-        guard kitchenStore.schedule(recipe, for: selectedDate, period: selectedMealPeriod, timeMinutes: minutes(in: selectedMealTime)) else {
-            coordinator.showToast("这道菜已安排在当天菜单")
-            return
-        }
-        coordinator.showToast("已安排\(recipe.title)到\(selectedMealPeriod.rawValue) \(ScheduledMeal(recipeID: recipe.id, period: selectedMealPeriod, timeMinutes: minutes(in: selectedMealTime)).timeLabel)")
+        let wasAlreadyScheduled = selectedRecipes.contains(recipe)
+        kitchenStore.schedule(recipe, for: selectedDate, period: selectedMealPeriod, timeMinutes: minutes(in: selectedMealTime))
+        coordinator.showToast("\(wasAlreadyScheduled ? "已更新" : "已安排")\(recipe.title)到\(selectedMealPeriod.rawValue) \(ScheduledMeal(recipeID: recipe.id, period: selectedMealPeriod, timeMinutes: minutes(in: selectedMealTime)).timeLabel)")
         isPresentingMealScheduler = false
     }
 

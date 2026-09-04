@@ -105,9 +105,15 @@ final class LocalKitchenStore: ObservableObject {
     ) -> Bool {
         let key = Self.dateKey(for: date)
         var meals = scheduledMealsByDate[key, default: []]
-        guard !meals.contains(where: { $0.recipeID == recipe.id }) else { return false }
-        let nextSortOrder = meals.filter { $0.period == period }.map(\.sortOrder).max().map { $0 + 1 } ?? 0
-        meals.append(ScheduledMeal(recipeID: recipe.id, period: period, timeMinutes: timeMinutes, sortOrder: nextSortOrder))
+        if let existingIndex = meals.firstIndex(where: { $0.recipeID == recipe.id }) {
+            let nextSortOrder = meals.filter { $0.period == period && $0.id != meals[existingIndex].id }.map(\.sortOrder).max().map { $0 + 1 } ?? 0
+            meals[existingIndex].period = period
+            meals[existingIndex].timeMinutes = timeMinutes ?? period.defaultTimeMinutes
+            meals[existingIndex].sortOrder = nextSortOrder
+        } else {
+            let nextSortOrder = meals.filter { $0.period == period }.map(\.sortOrder).max().map { $0 + 1 } ?? 0
+            meals.append(ScheduledMeal(recipeID: recipe.id, period: period, timeMinutes: timeMinutes, sortOrder: nextSortOrder))
+        }
         scheduledMealsByDate[key] = meals
         completedRecipeIDsByDate[key] = []
         persistSnapshot()
@@ -272,6 +278,10 @@ final class LocalKitchenStore: ObservableObject {
             .sorted { $0.version > $1.version }
     }
 
+    var customCategoryNames: [String] {
+        Array(Set(recipes.compactMap(\.customCategoryName))).sorted()
+    }
+
     private func persistSnapshot() {
         persistence.save(
             KitchenSnapshot(
@@ -309,7 +319,7 @@ final class LocalKitchenStore: ObservableObject {
 
         var changes: [String] = []
         if previousRecipe.title != recipe.title { changes.append("菜谱名称") }
-        if previousRecipe.category != recipe.category { changes.append("分类") }
+        if previousRecipe.categoryName != recipe.categoryName { changes.append("分类") }
         if previousRecipe.duration != recipe.duration { changes.append("烹饪时长") }
         if previousRecipe.ingredients != recipe.ingredients { changes.append("食材") }
         if previousRecipe.steps != recipe.steps { changes.append("步骤") }

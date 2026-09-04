@@ -39,7 +39,9 @@ struct Recipe: Identifiable, Hashable, Codable {
     let id: UUID
     let title: String
     let category: RecipeCategory
+    let customCategoryName: String?
     let emoji: String
+    let imageData: Data?
     let duration: Int
     let rating: Double
     let reviewCount: Int
@@ -52,7 +54,9 @@ struct Recipe: Identifiable, Hashable, Codable {
         id: UUID = UUID(),
         title: String,
         category: RecipeCategory,
+        customCategoryName: String? = nil,
         emoji: String,
+        imageData: Data? = nil,
         duration: Int,
         rating: Double,
         reviewCount: Int,
@@ -64,7 +68,9 @@ struct Recipe: Identifiable, Hashable, Codable {
         self.id = id
         self.title = title
         self.category = category
+        self.customCategoryName = customCategoryName
         self.emoji = emoji
+        self.imageData = imageData
         self.duration = duration
         self.rating = rating
         self.reviewCount = reviewCount
@@ -76,6 +82,10 @@ struct Recipe: Identifiable, Hashable, Codable {
 
     func ingredients(for kind: IngredientKind) -> [RecipeIngredient] {
         ingredients.filter { $0.kind == kind }
+    }
+
+    var categoryName: String {
+        customCategoryName ?? category.rawValue
     }
 }
 

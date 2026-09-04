@@ -1,11 +1,12 @@
 import SwiftUI
+import UIKit
 
 struct MenuHomeView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
     @EnvironmentObject private var kitchenStore: LocalKitchenStore
     @State private var selectedSection = "今天"
     @State private var searchText = ""
-    @State private var selectedCategory: RecipeCategory?
+    @State private var selectedCategoryName: String?
     @State private var sortOption: RecipeSortOption = .recommended
 
     private let sections = ["今天", "我想吃", "家庭常点", "全部菜谱"]
@@ -139,14 +140,14 @@ struct MenuHomeView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 Button("全部分类") {
-                    selectedCategory = nil
+                    selectedCategoryName = nil
                 }
-                .categoryChip(isSelected: selectedCategory == nil)
-                ForEach(RecipeCategory.allCases) { category in
-                    Button(category.rawValue) {
-                        selectedCategory = category
+                .categoryChip(isSelected: selectedCategoryName == nil)
+                ForEach(categoryNames, id: \.self) { categoryName in
+                    Button(categoryName) {
+                        selectedCategoryName = categoryName
                     }
-                    .categoryChip(isSelected: selectedCategory == category)
+                    .categoryChip(isSelected: selectedCategoryName == categoryName)
                 }
             }
         }
@@ -163,8 +164,8 @@ struct MenuHomeView: View {
         default:
             sectionRecipes = kitchenStore.recipes
         }
-        let categoryRecipes = selectedCategory.map { category in
-            sectionRecipes.filter { $0.category == category }
+        let categoryRecipes = selectedCategoryName.map { categoryName in
+            sectionRecipes.filter { $0.categoryName == categoryName }
         } ?? sectionRecipes
         let searchedRecipes: [Recipe]
         if searchText.isEmpty {
@@ -172,11 +173,15 @@ struct MenuHomeView: View {
         } else {
             searchedRecipes = categoryRecipes.filter {
             $0.title.localizedCaseInsensitiveContains(searchText)
-                || $0.category.rawValue.localizedCaseInsensitiveContains(searchText)
+                || $0.categoryName.localizedCaseInsensitiveContains(searchText)
                 || $0.ingredients.contains { $0.name.localizedCaseInsensitiveContains(searchText) }
             }
         }
         return sortOption.sort(searchedRecipes, kitchenStore: kitchenStore)
+    }
+
+    private var categoryNames: [String] {
+        Array(Set(RecipeCategory.allCases.map(\.rawValue) + kitchenStore.customCategoryNames)).sorted()
     }
 }
 
@@ -307,7 +312,7 @@ struct RecipeRow: View {
 
     var body: some View {
         HStack(spacing: 13) {
-            RecipeThumbnail(emoji: recipe.emoji, size: 82)
+            RecipeThumbnail(emoji: recipe.emoji, imageData: recipe.imageData, size: 82)
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .top) {
                     Text(recipe.title)
@@ -320,7 +325,7 @@ struct RecipeRow: View {
                             .foregroundStyle(AppTheme.carrot)
                     }
                 }
-                Text("\(recipe.category.rawValue) · \(recipe.duration) 分钟")
+                Text("\(recipe.categoryName) · \(recipe.duration) 分钟")
                     .font(.caption)
                     .foregroundStyle(AppTheme.muted)
                 HStack {
@@ -335,7 +340,7 @@ struct RecipeRow: View {
         .padding(10)
         .appCard()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(recipe.title)，\(recipe.category.rawValue)，\(recipe.duration) 分钟，\(recipe.availability.rawValue)")
+        .accessibilityLabel("\(recipe.title)，\(recipe.categoryName)，\(recipe.duration) 分钟，\(recipe.availability.rawValue)")
     }
 }
 
@@ -371,11 +376,20 @@ struct AvailabilityPill: View {
 
 struct RecipeThumbnail: View {
     let emoji: String
+    var imageData: Data? = nil
     var size: CGFloat = 96
 
     var body: some View {
-        Text(emoji)
-            .font(.system(size: size * 0.48))
+        Group {
+            if let imageData, let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Text(emoji)
+                    .font(.system(size: size * 0.48))
+            }
+        }
             .frame(width: size, height: size)
             .background(AppTheme.carrotSoft)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
