@@ -194,6 +194,35 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
+    func testIngredientQuantitiesPersistWithRecipe() throws {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let recipe = Recipe(
+            title: "番茄炒蛋",
+            category: .homestyle,
+            emoji: "🍅",
+            duration: 15,
+            rating: 0,
+            reviewCount: 0,
+            voteCount: 0,
+            availability: .check,
+            ingredients: [
+                RecipeIngredient(name: "番茄", quantity: "2 个", kind: .side),
+                RecipeIngredient(name: "香菜", quantity: "适量", kind: .side)
+            ],
+            steps: []
+        )
+
+        store.save(recipe: recipe)
+
+        let reloadedRecipe = try XCTUnwrap(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).recipe(id: recipe.id))
+        XCTAssertEqual(
+            reloadedRecipe.ingredients(for: .side).map { "\($0.name)|\($0.quantity)" },
+            ["番茄|2 个", "香菜|适量"]
+        )
+    }
+
+    @MainActor
     func testExistingMealPlanMigratesToDinnerAtDefaultTime() {
         let persistence = KitchenSnapshotStorage.inMemory()
         let recipe = SampleData.recipes[0]
