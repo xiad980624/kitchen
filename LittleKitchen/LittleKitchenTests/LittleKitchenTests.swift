@@ -151,6 +151,49 @@ final class LittleKitchenTests: XCTestCase {
     }
 
     @MainActor
+    func testSchedulingExistingRecipeUpdatesItsMealTime() throws {
+        let store = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
+        let date = Calendar.current.date(byAdding: .day, value: 4, to: .now)!
+        let recipe = store.recipes[0]
+
+        XCTAssertTrue(store.schedule(recipe, for: date, period: .breakfast, timeMinutes: 480))
+        XCTAssertTrue(store.schedule(recipe, for: date, period: .dinner, timeMinutes: 1_140))
+
+        let meal = try XCTUnwrap(store.scheduledMeals(for: date).first)
+        XCTAssertEqual(store.scheduledMeals(for: date).count, 1)
+        XCTAssertEqual(meal.period, .dinner)
+        XCTAssertEqual(meal.timeLabel, "19:00")
+    }
+
+    @MainActor
+    func testCustomRecipeCategoryAndImagePersist() throws {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let imageData = Data([1, 2, 3, 4])
+        let recipe = Recipe(
+            title: "深夜拌面",
+            category: .homestyle,
+            customCategoryName: "宵夜",
+            emoji: "🍜",
+            imageData: imageData,
+            duration: 10,
+            rating: 0,
+            reviewCount: 0,
+            voteCount: 0,
+            availability: .check,
+            ingredients: [],
+            steps: []
+        )
+
+        store.save(recipe: recipe)
+
+        let reloadedRecipe = try XCTUnwrap(LocalKitchenStore(persistence: persistence, legacyDefaults: nil).recipe(id: recipe.id))
+        XCTAssertEqual(reloadedRecipe.categoryName, "宵夜")
+        XCTAssertEqual(reloadedRecipe.imageData, imageData)
+        XCTAssertTrue(store.customCategoryNames.contains("宵夜"))
+    }
+
+    @MainActor
     func testExistingMealPlanMigratesToDinnerAtDefaultTime() {
         let persistence = KitchenSnapshotStorage.inMemory()
         let recipe = SampleData.recipes[0]

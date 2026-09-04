@@ -78,12 +78,12 @@ struct RecipeDetailView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 14) {
-            RecipeThumbnail(emoji: recipe.emoji, size: 136)
+            RecipeThumbnail(emoji: recipe.emoji, imageData: recipe.imageData, size: 136)
             Text(recipe.title)
                 .font(.largeTitle.weight(.bold))
                 .foregroundStyle(AppTheme.ink)
             HStack(spacing: 12) {
-                Label(recipe.category.rawValue, systemImage: "tag")
+                Label(recipe.categoryName, systemImage: "tag")
                 Label("\(recipe.duration) 分钟", systemImage: "clock")
                 Label(String(format: "%.1f", recipe.rating), systemImage: "star.fill")
                     .foregroundStyle(Color(red: 0.78, green: 0.49, blue: 0.08))
@@ -263,7 +263,7 @@ struct RecipeDetailView: View {
             Text(title)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(AppTheme.muted)
-            Text("\(snapshot.title) · \(snapshot.category.rawValue) · \(snapshot.duration) 分钟")
+            Text("\(snapshot.title) · \(snapshot.categoryName) · \(snapshot.duration) 分钟")
                 .font(.subheadline)
             Text(snapshot.ingredients.map(\.name).joined(separator: "、"))
                 .font(.caption)
