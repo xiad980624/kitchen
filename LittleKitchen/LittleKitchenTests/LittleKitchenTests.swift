@@ -478,6 +478,29 @@ final class LittleKitchenTests: XCTestCase {
         XCTAssertTrue(decodedSnapshot.checkedAutomaticShoppingItemNames.isEmpty)
     }
 
+    @MainActor
+    func testLocalBackupDocumentCanRestoreEverything() throws {
+        let sourcePersistence = KitchenSnapshotStorage.inMemory()
+        let sourceStore = LocalKitchenStore(persistence: sourcePersistence, legacyDefaults: nil)
+        let recipe = try XCTUnwrap(sourceStore.recipes.first)
+        sourceStore.saveReview(recipeID: recipe.id, rating: 5, comment: "备份测试")
+        sourceStore.schedule(recipe, for: .now, period: .breakfast, timeMinutes: 480)
+        XCTAssertTrue(sourceStore.addShoppingItem(name: "保鲜袋"))
+
+        let data = try JSONEncoder().encode(sourceStore.backupSnapshot)
+        let importedDocument = try KitchenBackupDocument(data: data)
+
+        let targetPersistence = KitchenSnapshotStorage.inMemory()
+        let targetStore = LocalKitchenStore(persistence: targetPersistence, legacyDefaults: nil)
+        targetStore.restore(snapshot: importedDocument.snapshot)
+
+        let reloadedStore = LocalKitchenStore(persistence: targetPersistence, legacyDefaults: nil)
+        XCTAssertEqual(reloadedStore.recipes, sourceStore.recipes)
+        XCTAssertEqual(reloadedStore.review(for: recipe)?.comment, "备份测试")
+        XCTAssertTrue(reloadedStore.scheduledMeals(for: .now, period: .breakfast).contains(where: { $0.recipeID == recipe.id }))
+        XCTAssertTrue(reloadedStore.shoppingItems.contains(where: { $0.name == "保鲜袋" && $0.isManual }))
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "LittleKitchenTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

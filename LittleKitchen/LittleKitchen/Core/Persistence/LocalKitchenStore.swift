@@ -337,24 +337,45 @@ final class LocalKitchenStore: ObservableObject {
         Array(Set(recipes.compactMap(\.customCategoryName))).sorted()
     }
 
+    var backupSnapshot: KitchenSnapshot {
+        currentSnapshot()
+    }
+
+    func restore(snapshot: KitchenSnapshot) {
+        recipes = snapshot.recipes
+        votedRecipeIDs = Set(snapshot.votedRecipeIDs)
+        reviews = Dictionary(uniqueKeysWithValues: snapshot.reviews.map { ($0.recipeID, $0) })
+        pantryItems = snapshot.pantryItems
+        scheduledMealsByDate = snapshot.scheduledMealsByDate.isEmpty
+            ? Self.migrateScheduledMeals(from: snapshot.scheduledRecipeIDsByDate)
+            : snapshot.scheduledMealsByDate
+        completedRecipeIDsByDate = snapshot.completedRecipeIDsByDate
+        manualShoppingItems = snapshot.manualShoppingItems
+        checkedAutomaticShoppingItemNames = Set(snapshot.checkedAutomaticShoppingItemNames)
+        revisions = snapshot.revisions
+        persistSnapshot()
+    }
+
     private func persistSnapshot() {
-        persistence.save(
-            KitchenSnapshot(
-                recipes: recipes,
-                votedRecipeIDs: votedRecipeIDs.sorted { $0.uuidString < $1.uuidString },
-                reviews: reviews.values.sorted { $0.recipeID.uuidString < $1.recipeID.uuidString },
-                pantryItems: pantryItems,
-                scheduledRecipeIDsByDate: scheduledMealsByDate.mapValues { meals in
-                    meals.sorted {
-                        $0.timeMinutes == $1.timeMinutes ? $0.sortOrder < $1.sortOrder : $0.timeMinutes < $1.timeMinutes
-                    }.map(\.recipeID)
-                },
-                scheduledMealsByDate: scheduledMealsByDate,
-                completedRecipeIDsByDate: completedRecipeIDsByDate,
-                manualShoppingItems: manualShoppingItems,
-                checkedAutomaticShoppingItemNames: checkedAutomaticShoppingItemNames.sorted(),
-                revisions: revisions
-            )
+        persistence.save(currentSnapshot())
+    }
+
+    private func currentSnapshot() -> KitchenSnapshot {
+        KitchenSnapshot(
+            recipes: recipes,
+            votedRecipeIDs: votedRecipeIDs.sorted { $0.uuidString < $1.uuidString },
+            reviews: reviews.values.sorted { $0.recipeID.uuidString < $1.recipeID.uuidString },
+            pantryItems: pantryItems,
+            scheduledRecipeIDsByDate: scheduledMealsByDate.mapValues { meals in
+                meals.sorted {
+                    $0.timeMinutes == $1.timeMinutes ? $0.sortOrder < $1.sortOrder : $0.timeMinutes < $1.timeMinutes
+                }.map(\.recipeID)
+            },
+            scheduledMealsByDate: scheduledMealsByDate,
+            completedRecipeIDsByDate: completedRecipeIDsByDate,
+            manualShoppingItems: manualShoppingItems,
+            checkedAutomaticShoppingItemNames: checkedAutomaticShoppingItemNames.sorted(),
+            revisions: revisions
         )
     }
 

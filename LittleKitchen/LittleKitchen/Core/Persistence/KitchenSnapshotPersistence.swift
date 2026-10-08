@@ -1,5 +1,7 @@
 import Foundation
 import SwiftData
+import SwiftUI
+import UniformTypeIdentifiers
 
 struct KitchenSnapshot: Codable {
     let recipes: [Recipe]
@@ -62,6 +64,43 @@ struct KitchenSnapshot: Codable {
         manualShoppingItems = try container.decodeIfPresent([ShoppingItem].self, forKey: .manualShoppingItems) ?? []
         checkedAutomaticShoppingItemNames = try container.decodeIfPresent([String].self, forKey: .checkedAutomaticShoppingItemNames) ?? []
         revisions = try container.decodeIfPresent([RecipeRevision].self, forKey: .revisions) ?? []
+    }
+}
+
+enum KitchenBackupError: LocalizedError {
+    case missingFileData
+
+    var errorDescription: String? {
+        switch self {
+        case .missingFileData:
+            return "备份文件没有可读取的数据。"
+        }
+    }
+}
+
+struct KitchenBackupDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+
+    let snapshot: KitchenSnapshot
+
+    init(snapshot: KitchenSnapshot) {
+        self.snapshot = snapshot
+    }
+
+    init(data: Data) throws {
+        snapshot = try JSONDecoder().decode(KitchenSnapshot.self, from: data)
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw KitchenBackupError.missingFileData
+        }
+        try self.init(data: data)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let data = try JSONEncoder().encode(snapshot)
+        return FileWrapper(regularFileWithContents: data)
     }
 }
 
