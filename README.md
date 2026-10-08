@@ -13,3 +13,7 @@
 3. 工程当前使用 Bundle ID `com.xiad980624.LittleKitchen`。设备端数据保存不依赖 iCloud；后续接入自建服务端时再配置服务端地址与身份认证。
 
 产品范围与架构决策见 [iOS 开发蓝图](docs/ios-development-blueprint.md)。
+
+## 自建同步服务
+
+服务端代码也保存在本仓库的 [backend](backend/README.md) 目录。它面向 `https://www.xdlink.xyz/api/v1`，部署说明、宝塔反向代理和数据库备份方式见该目录 README。iOS 客户端接入同步将作为独立改动进行。

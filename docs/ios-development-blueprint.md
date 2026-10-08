@@ -1,5 +1,7 @@
 # 小家厨房 iOS 开发蓝图 v0.1
 
+> **当前技术决定（2026-10）**：文中 CloudKit 方案已不再执行。同步服务改为本仓库 `backend/` 目录中的 FastAPI + PostgreSQL + Docker Compose，并由宝塔反向代理到 `https://www.xdlink.xyz/api/v1`。iOS 仍使用 SwiftData 作为本地缓存；客户端登录、邀请和同步队列将在服务端部署验证后单独接入。
+
 ## 0. 本轮结论
 
 首版做成 **iPhone 优先、iOS 17+、中文优先** 的原生 SwiftUI App。它以家庭协作为中心，先完整打通一条高频闭环：
