@@ -2,6 +2,10 @@ import SwiftUI
 
 struct RootTabView: View {
     @EnvironmentObject private var coordinator: AppCoordinator
+    @EnvironmentObject private var kitchenStore: LocalKitchenStore
+    @EnvironmentObject private var accountSession: AccountSession
+    @EnvironmentObject private var syncController: KitchenSyncController
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: $coordinator.selectedTab) {
@@ -46,5 +50,22 @@ struct RootTabView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: coordinator.toastMessage)
+        .task {
+            await accountSession.refreshHouseholds()
+            if accountSession.activeHousehold != nil {
+                await syncController.syncNow(store: kitchenStore, session: accountSession)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await syncController.syncNow(store: kitchenStore, session: accountSession) }
+        }
+        .onChange(of: kitchenStore.persistenceVersion) { _, _ in
+            guard accountSession.activeHousehold != nil else { return }
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                await syncController.syncNow(store: kitchenStore, session: accountSession)
+            }
+        }
     }
 }
