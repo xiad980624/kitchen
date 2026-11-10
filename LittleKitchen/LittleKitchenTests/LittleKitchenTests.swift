@@ -478,6 +478,38 @@ final class LittleKitchenTests: XCTestCase {
         XCTAssertTrue(decodedSnapshot.checkedAutomaticShoppingItemNames.isEmpty)
     }
 
+    @MainActor
+    func testSyncSnapshotRoundTripsWithoutLosingKitchenData() throws {
+        let persistence = KitchenSnapshotStorage.inMemory()
+        let store = LocalKitchenStore(persistence: persistence, legacyDefaults: nil)
+        let recipe = try XCTUnwrap(store.recipes.first)
+        store.schedule(recipe, for: .now, period: .lunch, timeMinutes: 720)
+        XCTAssertTrue(store.addShoppingItem(name: "同步测试项目"))
+
+        let data = try KitchenAPI.snapshotData(store.syncSnapshot)
+        let payload = try JSONDecoder().decode(JSONValue.self, from: data)
+        let decodedSnapshot = try KitchenAPI.snapshot(from: payload)
+
+        XCTAssertEqual(decodedSnapshot.recipes, store.recipes)
+        XCTAssertEqual(decodedSnapshot.pantryItems, store.pantryItems)
+        XCTAssertEqual(decodedSnapshot.manualShoppingItems.map(\.name), ["同步测试项目"])
+        XCTAssertEqual(decodedSnapshot.scheduledMealsByDate, store.scheduledMealsByDate)
+    }
+
+    @MainActor
+    func testReplacingLocalDataPersistsImportedSyncSnapshot() throws {
+        let source = LocalKitchenStore(persistence: KitchenSnapshotStorage.inMemory(), legacyDefaults: nil)
+        XCTAssertTrue(source.addPantryItem(name: "同步番茄", category: "蔬菜", quantity: "3 个"))
+
+        let targetPersistence = KitchenSnapshotStorage.inMemory()
+        let target = LocalKitchenStore(persistence: targetPersistence, legacyDefaults: nil)
+        target.replaceLocalData(with: source.syncSnapshot)
+
+        let reloaded = LocalKitchenStore(persistence: targetPersistence, legacyDefaults: nil)
+        XCTAssertEqual(reloaded.recipes, source.recipes)
+        XCTAssertTrue(reloaded.pantryItems.contains(where: { $0.name == "同步番茄" && $0.quantity == "3 个" }))
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "LittleKitchenTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

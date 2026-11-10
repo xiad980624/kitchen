@@ -10,9 +10,10 @@
 
 1. 用 Xcode 打开 `LittleKitchen/LittleKitchen.xcodeproj`。
 2. 选择任一 iOS 17 或更高版本的模拟器，运行 `LittleKitchen` scheme。
-3. 工程当前使用 Bundle ID `com.xiad980624.LittleKitchen`。设备端数据保存不依赖 iCloud；后续接入自建服务端时再配置服务端地址与身份认证。
+3. 工程当前使用 Bundle ID `com.xiad980624.LittleKitchen`。设备端始终保留本地数据；登录并进入家庭后，会通过自建服务同步菜谱、库存、日历与待购清单。菜谱图片的分离上传同步仍在后续待办中。
 
 产品范围与架构决策见 [iOS 开发蓝图](docs/ios-development-blueprint.md)。
+后续产品功能见 [待办清单](docs/product-todo.md)。
 
 ## 自建同步服务
 
